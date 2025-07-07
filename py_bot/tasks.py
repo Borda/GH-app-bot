@@ -60,7 +60,7 @@ async def run_repo_job(owner, repo, ref, token):
     job = Job.run(
         name=f"ci-run_{owner}-{repo}-{ref}",
         command=cmd,
-        machine=Machine.CPU_SMALL,
+        machine=Machine.CPU,
         # interruptible=True,
     )
     job.wait()
