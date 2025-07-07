@@ -12,15 +12,12 @@ from lightning_sdk import Job, Machine, Status
 
 
 async def run_sleeping_task(event):
-    # Replace with real logic; here we just succeed
+    # Replace it with real logic; here we just succeed
     await asyncio.sleep(60)
     return True
 
 
-async def run_repo_job(owner, repo, ref, token):
-    """
-    Download the full repo at `ref` into a tempdir, look for config file and execute the job.
-    """
+async def _download_repo_and_extract(owner, repo, ref, token) -> str:
     # 1) Fetch zipball archive
     url = f"https://api.github.com/repos/{owner}/{repo}/zipball/{ref}"
     headers = {
@@ -41,10 +38,17 @@ async def run_repo_job(owner, repo, ref, token):
     children = os.listdir(tempdir)
     if not children:
         return False, "Archive was empty"
-    root = os.path.join(tempdir, children[0])
+    return os.path.join(tempdir, children[0])
 
-    # 4) Try to load .pr-bot-config.yaml
-    cfg_path = os.path.join(root, ".lightning/actions.yaml")
+
+async def run_repo_job(owner, repo, ref, token):
+    """
+    Download the full repo at `ref` into a tempdir, look for config file and execute the job.
+    """
+    repo_root = await _download_repo_and_extract(owner, repo, ref, token)
+
+    # Try to load the config file
+    cfg_path = os.path.join(repo_root, ".lightning/actions.yaml")
     if not os.path.exists(cfg_path):
         return False, f"No config found at {cfg_path!r}"
 
@@ -55,7 +59,7 @@ async def run_repo_job(owner, repo, ref, token):
     except Exception as e:
         return False, f"Error parsing config: {e!s}"
 
-    cmd = f"cd {root} && pwd && {config}"
+    cmd = f"cd {repo_root} && pwd && {config}"
     print(f"CMD: {cmd}")
     job = Job.run(
         name=f"ci-run_{owner}-{repo}-{ref}",
@@ -64,7 +68,7 @@ async def run_repo_job(owner, repo, ref, token):
         # interruptible=True,
     )
     job.wait()
-    shutil.rmtree(tempdir)
+    shutil.rmtree(os.path.dirname(repo_root), ignore_errors=True)
 
     success = job.status == Status.Completed
     return success, f"run finished as {job.status}\n{job.logs}"
