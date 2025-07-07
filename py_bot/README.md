@@ -115,10 +115,4 @@ Push or update a PR to your target repo—you should see:
 
 ______________________________________________________________________
 
-## 💡 Next Steps
-
-- Add custom config loaders or linters
-- Schedule periodic rechecks or workflows
-- Parse `.yaml` rules and trigger Lightning Jobs dynamically
-
 This is your starting point for building scalable, bot-powered CI logic with native GitHub Checks support 🚀
