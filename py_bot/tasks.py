@@ -10,6 +10,7 @@ import aiohttp
 import yaml
 from lightning_sdk import Job, Machine, Status
 
+LOCAL_TEMP_DIR = Path("_temp")
 
 async def run_sleeping_task(event):
     # Replace it with real logic; here we just succeed
@@ -30,7 +31,8 @@ async def _download_repo_and_extract(owner, repo, ref, token) -> str:
     print(f"Pull repo from {url}")
 
     # 2) Extract zip into a temp directory
-    tempdir = Path(".temp") / uuid.uuid4().hex
+    tempdir = LOCAL_TEMP_DIR / uuid.uuid4().hex
+    tempdir.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(io.BytesIO(archive_data)) as zf:
         zf.extractall(tempdir)
 
