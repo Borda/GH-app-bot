@@ -61,7 +61,7 @@ async def run_repo_job(owner, repo, ref, token):
     except Exception as e:
         return False, f"Error parsing config: {e!s}"
 
-    cmd = f"ls -lh && ls -lh .temp/ cd {repo_root} && pwd && {config}"
+    cmd = " && ". join(["ls -lh", "ls -lh .temp/", f"cd {repo_root}", "pwd", config])
     print(f"CMD: {cmd}")
     job = Job.run(
         name=f"ci-run_{owner}-{repo}-{ref}",
