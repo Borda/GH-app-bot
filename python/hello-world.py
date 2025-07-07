@@ -1,3 +1,8 @@
+"""
+A simple aiohttp web server that responds with "Hello world" to POST requests.
+Basically just streamling response to validate that your app is running and can handle requests.
+"""
+
 import os
 
 from aiohttp import web
