@@ -1,3 +1,4 @@
+from datetime import datetime
 
 from py_bot.tasks import run_sleeping_task
 
@@ -15,7 +16,7 @@ async def on_pr_sync_simple(event, gh, *args, **kwargs):
             "name": "PR Extra Task",
             "head_sha": head_sha,
             "status": "in_progress",
-            "started_at": datetime.datetime.utcnow().isoformat() + "Z",
+            "started_at": datetime.utcnow().isoformat() + "Z",
         },
     )
     check_id = check["id"]
@@ -29,7 +30,7 @@ async def on_pr_sync_simple(event, gh, *args, **kwargs):
         f"/repos/{owner}/{repo}/check-runs/{check_id}",
         data={
             "status": "completed",
-            "completed_at": datetime.datetime.utcnow().isoformat() + "Z",
+            "completed_at": datetime.utcnow().isoformat() + "Z",
             "conclusion": conclusion,
             "output": {
                 "title": "Extra Task Results",
