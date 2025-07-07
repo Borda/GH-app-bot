@@ -7,7 +7,7 @@ import zipfile
 from pathlib import Path
 
 import aiohttp
-import yaml  # PyYAML
+import yaml
 from lightning_sdk import Job, Machine, Status
 
 
@@ -19,8 +19,7 @@ async def run_sleeping_task(event):
 
 async def run_repo_job(owner, repo, ref, token):
     """
-    Download the full repo at `ref` into a tempdir,
-    look for `.pr-bot-config.yaml`, return (bool, str).
+    Download the full repo at `ref` into a tempdir, look for config file and execute the job.
     """
     # 1) Fetch zipball archive
     url = f"https://api.github.com/repos/{owner}/{repo}/zipball/{ref}"
@@ -31,6 +30,7 @@ async def run_repo_job(owner, repo, ref, token):
     async with aiohttp.ClientSession() as session, session.get(url, headers=headers) as resp:
         resp.raise_for_status()
         archive_data = await resp.read()
+    print(f"Pull repo from {url}")
 
     # 2) Extract zip into temp directory
     tempdir = Path(".temp") / uuid.uuid4().hex

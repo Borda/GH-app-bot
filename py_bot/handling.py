@@ -1,3 +1,4 @@
+import asyncio
 import os
 import time
 
@@ -7,6 +8,8 @@ from aiohttp import web
 from gidgethub import sansio
 from gidgethub.aiohttp import GitHubAPI
 from gidgethub.apps import get_installation_access_token
+
+from py_bot.on_event import process_async_event
 
 
 async def handle_webhook(request):
@@ -19,14 +22,15 @@ async def handle_webhook(request):
     router = request.app["router"]
 
     # 1) App authentication → JWT
-    app_id = os.getenv("APP_ID")
+    app_id = os.getenv("GITHUB_APP_ID")
     with open(os.getenv("PRIVATE_KEY_PATH"), "rb") as fp:
-        private_key = fp.read()
+        private_key = fp.read()  # Read the private key from the file
     jwt_token = jwt.encode(
         {"iat": int(time.time()) - 60, "exp": int(time.time()) + (10 * 60), "iss": app_id},
         private_key,
         algorithm="RS256",
     )
+    print(f"handle: {app_id=} {secret=} {jwt_token=}")
 
     async with aiohttp.ClientSession() as session:
         # 2) Exchange JWT for installation token
@@ -41,4 +45,18 @@ async def handle_webhook(request):
         gh = GitHubAPI(session, "my-pr-status-bot", oauth_token=inst_token)
         await router.dispatch(event, gh, inst_token)
 
+
+async def handle_with_async_task(request):
+    """Minimal HTTP handler: read the webhook, schedule processing, and ack."""
+    body = await request.read()
+    secret = os.getenv("WEBHOOK_SECRET", "")
+    event = sansio.Event.from_http(request.headers, body, secret=secret)
+
+    # Get router from request app
+    router = request.app["router"]
+
+    # Schedule background processing with router
+    asyncio.create_task(process_async_event(event, router))
+
+    # Acknowledge immediately
     return web.Response(status=200)
