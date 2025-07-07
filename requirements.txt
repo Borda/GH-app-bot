@@ -1,2 +1,4 @@
 aiohttp
 gidgethub
+lightning_sdk
+PyYAML
