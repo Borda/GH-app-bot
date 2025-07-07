@@ -29,7 +29,7 @@ async def _download_repo_and_extract(owner, repo, ref, token) -> str:
         archive_data = await resp.read()
     print(f"Pull repo from {url}")
 
-    # 2) Extract zip into temp directory
+    # 2) Extract zip into a temp directory
     tempdir = Path(".temp") / uuid.uuid4().hex
     with zipfile.ZipFile(io.BytesIO(archive_data)) as zf:
         zf.extractall(tempdir)
@@ -37,7 +37,7 @@ async def _download_repo_and_extract(owner, repo, ref, token) -> str:
     # 3) Locate the extracted root folder
     children = os.listdir(tempdir)
     if not children:
-        return False, "Archive was empty"
+        return ""
     return os.path.join(tempdir, children[0])
 
 
@@ -46,6 +46,8 @@ async def run_repo_job(owner, repo, ref, token):
     Download the full repo at `ref` into a tempdir, look for config file and execute the job.
     """
     repo_root = await _download_repo_and_extract(owner, repo, ref, token)
+    if not repo_root:
+        return False, f"Failed to download or extract repo {owner}/{repo} at {ref}"
 
     # Try to load the config file
     cfg_path = os.path.join(repo_root, ".lightning/actions.yaml")
@@ -59,7 +61,7 @@ async def run_repo_job(owner, repo, ref, token):
     except Exception as e:
         return False, f"Error parsing config: {e!s}"
 
-    cmd = f"cd {repo_root} && pwd && {config}"
+    cmd = f"ls -lh && ls -lh .temp/ cd {repo_root} && pwd && {config}"
     print(f"CMD: {cmd}")
     job = Job.run(
         name=f"ci-run_{owner}-{repo}-{ref}",
