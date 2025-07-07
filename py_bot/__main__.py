@@ -8,7 +8,7 @@ from gidgethub import routing, sansio
 from gidgethub.aiohttp import GitHubAPI
 from gidgethub.apps import get_installation_access_token
 
-from .on_event import on_pr_sync_simple
+from py_bot.on_event import on_pr_sync_simple
 
 
 async def handle(request):
