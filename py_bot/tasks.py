@@ -64,7 +64,7 @@ async def run_repo_job(owner, repo, ref, token):
     except Exception as e:
         return False, f"Error parsing config: {e!s}"
 
-    user_cmd = " && ".join(["pwd", "ls -lh", config])
+    user_cmd = " && ".join(["pwd", "ls -l", config])
     print(f"CMD: {user_cmd}")
     cmd_file = ".lightning-actions.sh"
     cmd_path = os.path.join(repo_root, cmd_file)
