@@ -61,15 +61,21 @@ async def run_repo_job(owner, repo, ref, token):
     try:
         with open(cfg_path) as f:
             config = yaml.safe_load(f)
-        print(f">>>>>>>>>>>>>>\n{config!r}\n<<<<<<<<<<<<<<\n")
     except Exception as e:
         return False, f"Error parsing config: {e!s}"
 
-    cmd = " && ".join(["pwd", "ls -lh", f"cd {repo_root}", "pwd", config])
-    print(f"CMD: {cmd}")
+    user_cmd = " && ".join(["pwd", "ls -lh", config])
+    print(f"CMD: {user_cmd}")
+    cmd_file = ".lightning-actions.sh"
+    cmd_path = os.path.join(repo_root, cmd_file)
+    assert not os.path.isfile(cmd_path), "the expected actions.sh file already exists"  # todo: add unique hash
+    # dump the cmd to .lightning/actions.sh
+    with open(cmd_path, "w") as fp:
+        fp.write(user_cmd + "\n")
+    job_cmd = f"docker run --rm -v {repo_root}:/workspace -w /workspace  ubuntu:22.04  bash {cmd_file}"
     job = Job.run(
         name=f"ci-run_{owner}-{repo}-{ref}",
-        command=cmd,
+        command=job_cmd,
         machine=Machine.CPU,
         # interruptible=True,
     )
