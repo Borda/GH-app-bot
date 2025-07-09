@@ -73,7 +73,7 @@ async def run_repo_job(owner, repo, ref, token):
     cmd_path = os.path.join(repo_root, docker_run_script)
     assert not os.path.isfile(cmd_path), "the expected actions.sh file already exists"  # todo: add unique hash
     # dump the cmd to .lightning/actions.sh
-    with open(cmd_path, "w") as fp:
+    with open(cmd_path, "w", encoding="utf_8") as fp:
         fp.write(cmd_run + "\n")
     docker_run_env = " ".join([f'-e {k}="{v}"' for k, v in config_env.items()])
     job_cmd = (
