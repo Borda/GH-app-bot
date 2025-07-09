@@ -68,7 +68,7 @@ async def on_pr_synchronize(event, gh, token, *args, **kwargs):
 
     # 2) Download code & run your logic
     success, summary = await run_repo_job(owner, repo, head_sha, token)
-    print(f"Task({success}): {summary}")
+    print(f"Task finished >> {success}")
 
     # 3) Complete the check run
     conclusion = "success" if success else "failure"

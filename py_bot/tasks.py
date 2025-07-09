@@ -2,7 +2,6 @@ import asyncio
 import io
 import os
 import shutil
-import uuid
 import zipfile
 from pathlib import Path
 
@@ -21,6 +20,7 @@ async def run_sleeping_task(event):
 
 
 async def _download_repo_and_extract(owner, repo, ref, token) -> str:
+    """Download a GitHub repository at a specific ref (branch, tag, commit) and extract it to a temp directory."""
     # 1) Fetch zipball archive
     url = f"https://api.github.com/repos/{owner}/{repo}/zipball/{ref}"
     headers = {
@@ -33,7 +33,7 @@ async def _download_repo_and_extract(owner, repo, ref, token) -> str:
     print(f"Pull repo from {url}")
 
     # 2) Extract zip into a temp directory
-    tempdir = (LOCAL_TEMP_DIR / uuid.uuid4().hex).resolve()
+    tempdir = LOCAL_TEMP_DIR.resolve()
     tempdir.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(io.BytesIO(archive_data)) as zf:
         zf.extractall(tempdir)
@@ -46,9 +46,7 @@ async def _download_repo_and_extract(owner, repo, ref, token) -> str:
 
 
 async def run_repo_job(owner, repo, ref, token):
-    """
-    Download the full repo at `ref` into a tempdir, look for config file and execute the job.
-    """
+    """Download the full repo at `ref` into a tempdir, look for config file and execute the job."""
     repo_root = await _download_repo_and_extract(owner, repo, ref, token)
     if not repo_root:
         return False, f"Failed to download or extract repo {owner}/{repo} at {ref}"
@@ -58,21 +56,35 @@ async def run_repo_job(owner, repo, ref, token):
     if not os.path.exists(cfg_path):
         return False, f"No config found at {cfg_path!r}"
 
-    try:
-        with open(cfg_path) as f:
-            config = yaml.safe_load(f)
+    try:  # todo: add specific exception and yaml validation
+        cfg_text = Path(cfg_path).read_text()
+        config = yaml.safe_load(cfg_text)
+        # mandatory
+        config_run = config["run"]
+        # optional
+        docker_run_image = config.get("image", "ubuntu:22.04")
+        config_env = config.get("env", {})
     except Exception as e:
         return False, f"Error parsing config: {e!s}"
 
-    user_cmd = " && ".join(["pwd", "ls -d */ .?*/", config])
-    print(f"CMD: {user_cmd}")
-    cmd_file = ".lightning-actions.sh"
-    cmd_path = os.path.join(repo_root, cmd_file)
+    cmd_run = os.linesep.join(["ls -lah", config_run])
+    # print(f"CMD: {cmd_run}")
+    docker_run_script = ".lightning-actions.sh"
+    cmd_path = os.path.join(repo_root, docker_run_script)
     assert not os.path.isfile(cmd_path), "the expected actions.sh file already exists"  # todo: add unique hash
     # dump the cmd to .lightning/actions.sh
     with open(cmd_path, "w") as fp:
-        fp.write(user_cmd + "\n")
-    job_cmd = f"docker run --rm -v {repo_root}:/workspace -w /workspace  ubuntu:22.04  bash {cmd_file}"
+        fp.write(cmd_run + "\n")
+    docker_run_env = " ".join([f'-e {k}="{v}"' for k, v in config_env.items()])
+    job_cmd = (
+        "docker run --rm "
+        f"-v {repo_root}:/workspace "
+        "-w /workspace "
+        f"{docker_run_env} "
+        f"{docker_run_image} "
+        f"bash -lc 'cat {docker_run_script} && bash {docker_run_script}'"
+    )
+    print(f"job >> {job_cmd}")
     job = Job.run(
         name=f"ci-run_{owner}-{repo}-{ref}",
         command=job_cmd,
