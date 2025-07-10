@@ -1,6 +1,7 @@
 import asyncio
 import io
 import os
+import shlex
 import zipfile
 from pathlib import Path
 
@@ -75,12 +76,10 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
     assert not os.path.isfile(cmd_path), "the expected actions script already exists"
     # dump the cmd to .lightning/actions.sh
     with open(cmd_path, "w", encoding="utf_8") as fp:
-        fp.write(cmd_run + "\n")
-        fp.flush()
-        os.fsync(fp.fileno())  # Ensure the file is flushed and synced to disk
+        fp.write(cmd_run + os.linesep)
     assert os.path.isfile(cmd_path), "missing the created actions script"
-    import shlex
-    docker_run_env = " ".join([f'-e {k}={shlex.quote(str(v))}' for k, v in config_env.items()])
+    await asyncio.sleep(3)  # todo: wait for the file to be written, likely Job sync issue
+    docker_run_env = " ".join([f"-e {k}={shlex.quote(str(v))}" for k, v in config_env.items()])
     # at the beginning make copy of the repo_dir to avoid conflicts with other jobs
     docker_run_cmd = " && ".join([
         "printenv",
