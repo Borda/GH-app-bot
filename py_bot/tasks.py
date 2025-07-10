@@ -79,7 +79,7 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
     with open(cmd_path, "w", encoding="utf_8") as fp:
         fp.write(cmd_run + "\n")
     assert os.path.isfile(cmd_path), "missing the created actions script"
-    await asyncio.sleep(1)  # todo: wait for the file to be flushed/synced
+    await asyncio.sleep(5)  # todo: wait for the file to be flushed/synced
     docker_run_env = " ".join([f'-e {k}="{v}"' for k, v in config_env.items()])
     # at the beginning make copy of the repo_dir to avoid conflicts with other jobs
     docker_run_cmd = " && ".join([
