@@ -13,7 +13,7 @@ LOCAL_ROOT_DIR = Path(__file__).parent
 LOCAL_TEMP_DIR = LOCAL_ROOT_DIR / ".temp"
 
 
-async def run_sleeping_task(event):
+async def run_sleeping_task(*args, **kwargs):
     # Replace it with real logic; here we just succeed
     await asyncio.sleep(60)
     return True
@@ -43,6 +43,23 @@ async def _download_repo_and_extract(owner, repo, ref, token) -> str:
     if not children:
         return ""
     return os.path.join(tempdir, children[0])
+
+
+async def job_await(job, interval: float = 5.0, timeout = None) -> None:
+    # todo: temp solution until jib has async wait method
+    import asyncio
+
+    from lightning_sdk.status import Status
+
+    start = asyncio.get_event_loop().time()
+    while True:
+        if job.status in (Status.Completed, Status.Stopped, Status.Failed):
+            break
+
+        if timeout is not None and asyncio.get_event_loop().time() - start > timeout:
+            raise TimeoutError("Job didn't finish within the provided timeout.")
+
+        await asyncio.sleep(interval)
 
 
 async def run_repo_job(repo_dir: str, job_name: str):
@@ -91,7 +108,7 @@ async def run_repo_job(repo_dir: str, job_name: str):
         machine=Machine.CPU,
         # interruptible=True,
     )
-    job.wait()
+    await job_await(job)
     # shutil.rmtree(os.path.dirname(repo_dir), ignore_errors=True)
 
     success = job.status == Status.Completed
