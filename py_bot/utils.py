@@ -5,6 +5,7 @@ import time
 
 _RESTRICTED_PARAMETERS = ("env", "run")
 
+
 def generate_matrix_from_config(config_parametrize: dict) -> list:
     """Generate a list of parameter dictionaries from YAML config matrix.
 
@@ -51,7 +52,9 @@ def generate_matrix_from_config(config_parametrize: dict) -> list:
             raise ValueError("Include items must be dictionaries.")
         for item in include:
             if any(k in _RESTRICTED_PARAMETERS for k in item):
-                raise ValueError(f"Parameters {', '.join(_RESTRICTED_PARAMETERS)} are not allowed in the include items.")
+                raise ValueError(
+                    f"Parameters {', '.join(_RESTRICTED_PARAMETERS)} are not allowed in the include items."
+                )
             all_combinations.append(item)
 
     # Remove exclude items

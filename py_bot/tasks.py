@@ -5,9 +5,7 @@ import zipfile
 from pathlib import Path
 
 import aiohttp
-import yaml
 from lightning_sdk import Job, Machine, Status
-from sympy.physics.vector.printing import params
 
 from py_bot.utils import generate_unique_hash
 
@@ -83,7 +81,11 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
     docker_run_env = " ".join([f'-e {k}="{v}"' for k, v in config_env.items()])
     # at the beginning make copy of the repo_dir to avoid conflicts with other jobs
     docker_run_cmd = " && ".join([
-        "printenv", "cp -r /temp_repo/. /workspace/", "ls -lah", f"cat {docker_run_script}", f"bash {docker_run_script}"
+        "printenv",
+        "cp -r /temp_repo/. /workspace/",
+        "ls -lah",
+        f"cat {docker_run_script}",
+        f"bash {docker_run_script}",
     ])
     job_cmd = (
         "docker run --rm"

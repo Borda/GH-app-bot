@@ -75,7 +75,7 @@ async def on_pr_synchronize(event, gh, token, *args, **kwargs) -> None:
     # 2) Launch check runs for each job
     tasks = []
     for i, params in enumerate(parameters):
-        task_name = f"PR Extra Task {i + 1}"
+        task_name = f"Lit Job ({', '.join(params.values())})"
         print(f"=> pull_request: synchronize -> {task_name=}")
 
         # Create check run
@@ -91,7 +91,21 @@ async def on_pr_synchronize(event, gh, token, *args, **kwargs) -> None:
         check_id = check["id"]
 
         # detach with only the token, owner, repo, etc.
-        tasks.append(asyncio.create_task(run_and_complete(token=token, owner=owner, repo=repo, ref=head_sha, config=config, params=params, repo_dir=repo_dir, task_name=task_name, check_id=check_id)))
+        tasks.append(
+            asyncio.create_task(
+                run_and_complete(
+                    token=token,
+                    owner=owner,
+                    repo=repo,
+                    ref=head_sha,
+                    config=config,
+                    params=params,
+                    repo_dir=repo_dir,
+                    task_name=task_name,
+                    check_id=check_id,
+                )
+            )
+        )
 
     # 3) Wait for all tasks to complete
     await asyncio.gather(*tasks)
@@ -99,9 +113,11 @@ async def on_pr_synchronize(event, gh, token, *args, **kwargs) -> None:
     shutil.rmtree(repo_dir, ignore_errors=True)
 
 
-async def run_and_complete(token, owner: str, repo: str, ref: str, config: dict, params: dict, repo_dir: str, task_name: str, check_id):
+async def run_and_complete(
+    token, owner: str, repo: str, ref: str, config: dict, params: dict, repo_dir: str, task_name: str, check_id
+) -> None:
     # run the job with docker in the repo directory
-    job_name = f"ci-run_{owner}-{repo}-{ref}-{task_name}"
+    job_name = f"ci-run_{owner}-{repo}-{ref}-{task_name.replace(' ', '_')}"
     success, summary = await run_repo_job(config=config, params=params, repo_dir=repo_dir, job_name=job_name)
     print(f"job '{job_name}' finished with {success}")
 
