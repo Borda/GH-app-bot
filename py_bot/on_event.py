@@ -7,6 +7,8 @@ from gidgethub.aiohttp import GitHubAPI
 
 from py_bot.tasks import _download_repo_and_extract, run_repo_job, run_sleeping_task
 
+MAX_SUMMARY_LENGTH = 64000
+
 
 async def on_pr_sync_simple(event, gh, *args, **kwargs) -> None:
     owner = event.data["repository"]["owner"]["login"]
