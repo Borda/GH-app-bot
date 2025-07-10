@@ -97,11 +97,11 @@ async def on_pr_synchronize(event, gh, token, *args, **kwargs):
         return False, f"Failed to download or extract repo {owner}/{repo} at {head_sha}"
 
     # Launch check runs for each job
-    tasks = []
     for i in range(3):
+        task_name = f"PR Extra Task {i + 1}"
+        print(f"=> pull_request: synchronize -> {task_name=}")
 
         # Create check run
-        task_name = f"PR Extra Task {i + 1}"
         check = await gh.post(
             f"/repos/{owner}/{repo}/check-runs",
             data={
@@ -113,18 +113,16 @@ async def on_pr_synchronize(event, gh, token, *args, **kwargs):
         )
         check_id = check["id"]
 
-        tasks.append(
-            asyncio.create_task(
-                run_and_finalize_check(
-                    gh, owner, repo, head_sha, repo_dir, task_name, check_id
-                )
+        print(f"---> pull_request: synchronize :: create task...")# detach the actual runner task
+        asyncio.get_event_loop().create_task(
+            run_and_complete(
+                gh, owner, repo, head_sha, repo_dir, task_name, check_id
             )
         )
+        print(f"---> pull_request: synchronize :: move to next one...")
 
-    await asyncio.gather(*tasks)
 
-
-async def run_and_finalize_check(gh, owner, repo, ref, repo_dir, task_name, check_id):
+async def run_and_complete(gh, owner, repo, ref, repo_dir, task_name, check_id):
     success, summary = await run_repo_job(repo_dir, f"ci-run_{owner}-{repo}-{ref}-{task_name}")
 
     conclusion = "success" if success else "failure"
