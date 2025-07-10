@@ -82,7 +82,7 @@ async def run_repo_job(owner, repo, ref, token):
         "-w /workspace "
         f"{docker_run_env} "
         f"{docker_run_image} "
-        f"bash -lc 'cat {docker_run_script} && bash {docker_run_script}'"
+        f"bash -lc 'ls -lah && cat {docker_run_script} && bash {docker_run_script}'"
     )
     print(f"job >> {job_cmd}")
     job = Job.run(

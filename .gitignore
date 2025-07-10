@@ -5,3 +5,6 @@ __pycache__/
 
 # PyCharm
 .idea/
+
+# fetch repositories
+py_bot/.temp/
