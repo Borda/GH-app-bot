@@ -45,14 +45,14 @@ async def _download_repo_and_extract(owner, repo, ref, token) -> str:
     return os.path.join(tempdir, children[0])
 
 
-async def run_repo_job(owner, repo, ref, token):
-    """Download the full repo at `ref` into a tempdir, look for config file and execute the job."""
-    repo_root = await _download_repo_and_extract(owner, repo, ref, token)
-    if not repo_root:
-        return False, f"Failed to download or extract repo {owner}/{repo} at {ref}"
+async def run_repo_job(repo_dir: str, job_name: str):
+    """Download the full repo at `ref` into a tempdir, look for config and execute the job."""
+    # repo_root = await _download_repo_and_extract(owner, repo, ref, token)
+    # if not repo_root:
+    #     return False, f"Failed to download or extract repo {owner}/{repo} at {ref}"
 
     # Try to load the config file
-    cfg_path = os.path.join(repo_root, ".lightning/actions.yaml")
+    cfg_path = os.path.join(repo_dir, ".lightning/actions.yaml")
     if not os.path.exists(cfg_path):
         return False, f"No config found at {cfg_path!r}"
 
@@ -70,15 +70,15 @@ async def run_repo_job(owner, repo, ref, token):
     cmd_run = os.linesep.join(["ls -lah", config_run])
     # print(f"CMD: {cmd_run}")
     docker_run_script = ".lightning-actions.sh"
-    cmd_path = os.path.join(repo_root, docker_run_script)
-    assert not os.path.isfile(cmd_path), "the expected actions.sh file already exists"  # todo: add unique hash
+    cmd_path = os.path.join(repo_dir, docker_run_script)
+    # assert not os.path.isfile(cmd_path), "the expected actions.sh file already exists"  # todo: add unique hash
     # dump the cmd to .lightning/actions.sh
     with open(cmd_path, "w", encoding="utf_8") as fp:
         fp.write(cmd_run + "\n")
     docker_run_env = " ".join([f'-e {k}="{v}"' for k, v in config_env.items()])
     job_cmd = (
         "docker run --rm "
-        f"-v {repo_root}:/workspace "
+        f"-v {repo_dir}:/workspace "
         "-w /workspace "
         f"{docker_run_env} "
         f"{docker_run_image} "
@@ -86,13 +86,13 @@ async def run_repo_job(owner, repo, ref, token):
     )
     print(f"job >> {job_cmd}")
     job = Job.run(
-        name=f"ci-run_{owner}-{repo}-{ref}",
+        name=job_name,
         command=job_cmd,
         machine=Machine.CPU,
         # interruptible=True,
     )
     job.wait()
-    shutil.rmtree(os.path.dirname(repo_root), ignore_errors=True)
+    # shutil.rmtree(os.path.dirname(repo_dir), ignore_errors=True)
 
     success = job.status == Status.Completed
     return success, f"run finished as {job.status}\n{job.logs}"

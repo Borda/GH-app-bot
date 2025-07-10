@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import os
 import time
@@ -8,7 +9,7 @@ import jwt  # PyJWT
 from gidgethub.aiohttp import GitHubAPI
 from gidgethub.apps import get_installation_access_token
 
-from py_bot.tasks import run_repo_job, run_sleeping_task
+from py_bot.tasks import run_repo_job, run_sleeping_task, _download_repo_and_extract
 
 
 async def on_pr_sync_simple(event, gh, *args, **kwargs):
@@ -48,29 +49,84 @@ async def on_pr_sync_simple(event, gh, *args, **kwargs):
     )
 
 
+# async def on_pr_synchronize(event, gh, token, *args, **kwargs):
+#     owner = event.data["repository"]["owner"]["login"]
+#     repo = event.data["repository"]["name"]
+#     head_sha = event.data["pull_request"]["head"]["sha"]
+#     print(f"-> pull_request: synchronize -> {owner=} {repo=} {head_sha=}")
+#
+#     # 1) Create an in_progress check run
+#     check = await gh.post(
+#         f"/repos/{owner}/{repo}/check-runs",
+#         data={
+#             "name": "PR Extra Task",
+#             "head_sha": head_sha,
+#             "status": "in_progress",
+#             "started_at": datetime.datetime.utcnow().isoformat() + "Z",
+#         },
+#     )
+#     check_id = check["id"]
+#
+#     # 2) Download code & run your logic
+#     success, summary = await run_repo_job(owner, repo, head_sha, token)
+#     print(f"Task finished >> {success}")
+#
+#     # 3) Complete the check run
+#     conclusion = "success" if success else "failure"
+#     await gh.patch(
+#         f"/repos/{owner}/{repo}/check-runs/{check_id}",
+#         data={
+#             "status": "completed",
+#             "completed_at": datetime.datetime.utcnow().isoformat() + "Z",
+#             "conclusion": conclusion,
+#             "output": {
+#                 "title": "Extra Task Results",
+#                 "summary": summary or "Bot is still thinking what just happened...",
+#             },
+#         },
+#     )
+
+
 async def on_pr_synchronize(event, gh, token, *args, **kwargs):
     owner = event.data["repository"]["owner"]["login"]
     repo = event.data["repository"]["name"]
     head_sha = event.data["pull_request"]["head"]["sha"]
-    print(f"-> pull_request: synchronize -> {owner=} {repo=} {head_sha=}")
 
-    # 1) Create an in_progress check run
-    check = await gh.post(
-        f"/repos/{owner}/{repo}/check-runs",
-        data={
-            "name": "PR Extra Task",
-            "head_sha": head_sha,
-            "status": "in_progress",
-            "started_at": datetime.datetime.utcnow().isoformat() + "Z",
-        },
-    )
-    check_id = check["id"]
+    repo_dir = await _download_repo_and_extract(owner, repo, head_sha, token)
+    if not repo_dir:
+        return False, f"Failed to download or extract repo {owner}/{repo} at {head_sha}"
 
-    # 2) Download code & run your logic
-    success, summary = await run_repo_job(owner, repo, head_sha, token)
-    print(f"Task finished >> {success}")
+    # Launch check runs for each job
+    tasks = []
+    for i in range(3):
 
-    # 3) Complete the check run
+        # Create check run
+        task_name = f"PR Extra Task {i + 1}"
+        check = await gh.post(
+            f"/repos/{owner}/{repo}/check-runs",
+            data={
+                "name": task_name,
+                "head_sha": head_sha,
+                "status": "in_progress",
+                "started_at": datetime.datetime.utcnow().isoformat() + "Z",
+            },
+        )
+        check_id = check["id"]
+
+        tasks.append(
+            asyncio.create_task(
+                run_and_finalize_check(
+                    gh, owner, repo, head_sha, repo_dir, task_name, check_id
+                )
+            )
+        )
+
+    await asyncio.gather(*tasks)
+
+
+async def run_and_finalize_check(gh, owner, repo, ref, repo_dir, task_name, check_id):
+    success, summary = await run_repo_job(repo_dir, f"ci-run_{owner}-{repo}-{ref}-{task_name}")
+
     conclusion = "success" if success else "failure"
     await gh.patch(
         f"/repos/{owner}/{repo}/check-runs/{check_id}",
@@ -79,8 +135,8 @@ async def on_pr_synchronize(event, gh, token, *args, **kwargs):
             "completed_at": datetime.datetime.utcnow().isoformat() + "Z",
             "conclusion": conclusion,
             "output": {
-                "title": "Extra Task Results",
-                "summary": summary or "Bot is still thinking what just happened...",
+                "title": f"{task_name} result",
+                "summary": summary[:64000],
             },
         },
     )
