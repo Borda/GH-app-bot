@@ -66,6 +66,7 @@ def generate_matrix_from_config(config_parametrize: dict) -> list:
     for combo in all_combinations:
         should_exclude = False
         for exclude_item in exclude:
+            # todo: make the rule behaving as GitHub Actions matrix exclude
             if all(combo.get(k) == v for k, v in exclude_item.items()):
                 should_exclude = True
                 break
