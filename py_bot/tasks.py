@@ -1,7 +1,6 @@
 import asyncio
 import io
 import os
-import shutil
 import zipfile
 from pathlib import Path
 
@@ -45,7 +44,7 @@ async def _download_repo_and_extract(owner, repo, ref, token) -> str:
     return os.path.join(tempdir, children[0])
 
 
-async def job_await(job, interval: float = 5.0, timeout = None) -> None:
+async def job_await(job, interval: float = 5.0, timeout=None) -> None:
     # todo: temp solution until jib has async wait method
     import asyncio
 
@@ -64,10 +63,6 @@ async def job_await(job, interval: float = 5.0, timeout = None) -> None:
 
 async def run_repo_job(repo_dir: str, job_name: str):
     """Download the full repo at `ref` into a tempdir, look for config and execute the job."""
-    # repo_root = await _download_repo_and_extract(owner, repo, ref, token)
-    # if not repo_root:
-    #     return False, f"Failed to download or extract repo {owner}/{repo} at {ref}"
-
     # Try to load the config file
     cfg_path = os.path.join(repo_dir, ".lightning/actions.yaml")
     if not os.path.exists(cfg_path):
@@ -109,7 +104,6 @@ async def run_repo_job(repo_dir: str, job_name: str):
         # interruptible=True,
     )
     await job_await(job)
-    # shutil.rmtree(os.path.dirname(repo_dir), ignore_errors=True)
 
     success = job.status == Status.Completed
     return success, f"run finished as {job.status}\n{job.logs}"
