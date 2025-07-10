@@ -73,19 +73,22 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
     # print(f"CMD: {cmd_run}")
     docker_run_script = f".lightning-actions-{generate_unique_hash()}.sh"
     cmd_path = os.path.join(repo_dir, docker_run_script)
-    # assert not os.path.isfile(cmd_path), "the expected actions.sh file already exists"  # todo: add unique hash
+    assert not os.path.isfile(cmd_path), "the expected actions script already exists"
     # dump the cmd to .lightning/actions.sh
     with open(cmd_path, "w", encoding="utf_8") as fp:
         fp.write(cmd_run + "\n")
+    assert os.path.isfile(cmd_path), "missing the created actions script"
     docker_run_env = " ".join([f'-e {k}="{v}"' for k, v in config_env.items()])
-    # todo: at the beginning make copy of the repo_dir to avoid conflicts with other jobs
+    # at the beginning make copy of the repo_dir to avoid conflicts with other jobs
+    docker_run_cmd = " ".join([
+        "printenv", "cp -r /temp_repo/* /workspace/", "ls -lah", f"cat {docker_run_script}", f"bash {docker_run_script}"
+    ])
     job_cmd = (
-        "docker run --rm "
-        f"-v {repo_dir}:/workspace "
-        "-w /workspace "
-        f"{docker_run_env} "
-        f"{docker_run_image} "
-        f"bash -lc 'printenv && ls -lah && cat {docker_run_script} && bash {docker_run_script}'"
+        "docker run --rm"
+        f" -v {repo_dir}:/temp_repo"
+        " -w /workspace"
+        f" {docker_run_env} {docker_run_image}"
+        f" bash -lc '{docker_run_cmd}'"
     )
     print(f"job >> {job_cmd}")
     job = Job.run(
