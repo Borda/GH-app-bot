@@ -101,7 +101,9 @@ async def on_pr_synchronize(event, gh, token, *args, **kwargs) -> None:
 
 async def run_and_complete(token, owner: str, repo: str, ref: str, config: dict, params: dict, repo_dir: str, task_name: str, check_id):
     # run the job with docker in the repo directory
-    success, summary = await run_repo_job(config=config, params=params, repo_dir=repo_dir, job_name=f"ci-run_{owner}-{repo}-{ref}-{task_name}")
+    job_name = f"ci-run_{owner}-{repo}-{ref}-{task_name}"
+    success, summary = await run_repo_job(config=config, params=params, repo_dir=repo_dir, job_name=job_name)
+    print(f"job '{job_name}' finished with {success}")
 
     # open its own session & GitHubAPI to patch the check-run
     async with aiohttp.ClientSession() as session:

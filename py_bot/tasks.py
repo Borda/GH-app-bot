@@ -65,6 +65,7 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
     # mandatory
     config_run = config["run"]
     # optional
+    docker_run_machine = Machine.from_str(params.get("machine") or config.get("machine", "CPU"))
     docker_run_image = params.get("image") or config.get("image", "ubuntu:22.04")
     config_env = config.get("env", {})
     config_env.update(params)  # add params to env
@@ -78,11 +79,11 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
     with open(cmd_path, "w", encoding="utf_8") as fp:
         fp.write(cmd_run + "\n")
     assert os.path.isfile(cmd_path), "missing the created actions script"
-    await asyncio.sleep(5)  # todo: wait for the file to be flushed/synced
+    await asyncio.sleep(1)  # todo: wait for the file to be flushed/synced
     docker_run_env = " ".join([f'-e {k}="{v}"' for k, v in config_env.items()])
     # at the beginning make copy of the repo_dir to avoid conflicts with other jobs
     docker_run_cmd = " && ".join([
-        "printenv", "cp -r /temp_repo/* /workspace/", "ls -lah", f"cat {docker_run_script}", f"bash {docker_run_script}"
+        "printenv", "cp -r /temp_repo/. /workspace/", "ls -lah", f"cat {docker_run_script}", f"bash {docker_run_script}"
     ])
     job_cmd = (
         "docker run --rm"
@@ -95,8 +96,8 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
     job = Job.run(
         name=job_name,
         command=job_cmd,
-        machine=Machine.CPU, # todo: parse from config or params
-        # interruptible=True,
+        machine=docker_run_machine,
+        interruptible=config.get("interruptible", False),
     )
     await job_await(job)
 
