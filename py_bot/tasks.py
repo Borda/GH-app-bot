@@ -76,9 +76,11 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
     # dump the cmd to .lightning/actions.sh
     with open(cmd_path, "w", encoding="utf_8") as fp:
         fp.write(cmd_run + "\n")
+        fp.flush()
+        os.fsync(fp.fileno())  # Ensure the file is flushed and synced to disk
     assert os.path.isfile(cmd_path), "missing the created actions script"
-    await asyncio.sleep(5)  # todo: wait for the file to be flushed/synced
-    docker_run_env = " ".join([f'-e {k}="{v}"' for k, v in config_env.items()])
+    import shlex
+    docker_run_env = " ".join([f'-e {k}={shlex.quote(str(v))}' for k, v in config_env.items()])
     # at the beginning make copy of the repo_dir to avoid conflicts with other jobs
     docker_run_cmd = " && ".join([
         "printenv",

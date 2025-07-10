@@ -67,8 +67,10 @@ async def on_pr_synchronize(event, gh, token, *args, **kwargs) -> None:
 
     try:  # todo: add specific exception and yaml validation
         config = yaml.safe_load(cfg_path.read_text())
-    except Exception as e:
-        raise RuntimeError(f"Error parsing config: {e!s}")
+    except yaml.YAMLError as e:
+        raise RuntimeError(f"YAML parsing error in config file: {e!s}")
+    except OSError as e:
+        raise RuntimeError(f"File error while reading config: {e!s}")
 
     parameters = generate_matrix_from_config(config.get("parametrize", {}))
 
