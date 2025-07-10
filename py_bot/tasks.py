@@ -80,7 +80,7 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
     assert os.path.isfile(cmd_path), "missing the created actions script"
     docker_run_env = " ".join([f'-e {k}="{v}"' for k, v in config_env.items()])
     # at the beginning make copy of the repo_dir to avoid conflicts with other jobs
-    docker_run_cmd = " ".join([
+    docker_run_cmd = " && ".join([
         "printenv", "cp -r /temp_repo/* /workspace/", "ls -lah", f"cat {docker_run_script}", f"bash {docker_run_script}"
     ])
     job_cmd = (
@@ -100,4 +100,5 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
     await job_await(job)
 
     success = job.status == Status.Completed
+    # todo: cleanup job if needed or success
     return success, f"run finished as {job.status}\n{job.logs}"
