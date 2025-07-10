@@ -1,11 +1,14 @@
 import asyncio
 import datetime
 import shutil
+from pathlib import Path
 
 import aiohttp
+import yaml
 from gidgethub.aiohttp import GitHubAPI
 
 from py_bot.tasks import _download_repo_and_extract, run_repo_job, run_sleeping_task
+from py_bot.utils import generate_matrix_from_config
 
 MAX_SUMMARY_LENGTH = 64000
 
@@ -57,9 +60,21 @@ async def on_pr_synchronize(event, gh, token, *args, **kwargs) -> None:
     if not repo_dir:
         raise RuntimeError(f"Failed to download or extract repo {owner}/{repo} at {head_sha}")
 
+    # 2) Read the config file
+    cfg_path = Path(repo_dir) / ".lightning" / "actions.yaml"
+    if not cfg_path.exists():
+        raise FileNotFoundError(f"No config found at {cfg_path!r}")
+
+    try:  # todo: add specific exception and yaml validation
+        config = yaml.safe_load(cfg_path.read_text())
+    except Exception as e:
+        raise RuntimeError(f"Error parsing config: {e!s}")
+
+    parameters = generate_matrix_from_config(config.get("parametrize", {}))
+
     # 2) Launch check runs for each job
     tasks = []
-    for i in range(3):
+    for i, params in enumerate(parameters):
         task_name = f"PR Extra Task {i + 1}"
         print(f"=> pull_request: synchronize -> {task_name=}")
 
@@ -76,7 +91,7 @@ async def on_pr_synchronize(event, gh, token, *args, **kwargs) -> None:
         check_id = check["id"]
 
         # detach with only the token, owner, repo, etc.
-        tasks.append(asyncio.create_task(run_and_complete(token, owner, repo, head_sha, repo_dir, task_name, check_id)))
+        tasks.append(asyncio.create_task(run_and_complete(token=token, owner=owner, repo=repo, ref=head_sha, config=config, params=params, repo_dir=repo_dir, task_name=task_name, check_id=check_id)))
 
     # 3) Wait for all tasks to complete
     await asyncio.gather(*tasks)
@@ -84,9 +99,9 @@ async def on_pr_synchronize(event, gh, token, *args, **kwargs) -> None:
     shutil.rmtree(repo_dir, ignore_errors=True)
 
 
-async def run_and_complete(token, owner, repo, ref, repo_dir, task_name, check_id):
+async def run_and_complete(token, owner: str, repo: str, ref: str, config: dict, params: dict, repo_dir: str, task_name: str, check_id):
     # run the job with docker in the repo directory
-    success, summary = await run_repo_job(repo_dir, f"ci-run_{owner}-{repo}-{ref}-{task_name}")
+    success, summary = await run_repo_job(config=config, params=params, repo_dir=repo_dir, job_name=f"ci-run_{owner}-{repo}-{ref}-{task_name}")
 
     # open its own session & GitHubAPI to patch the check-run
     async with aiohttp.ClientSession() as session:

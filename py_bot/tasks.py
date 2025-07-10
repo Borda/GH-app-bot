@@ -7,6 +7,9 @@ from pathlib import Path
 import aiohttp
 import yaml
 from lightning_sdk import Job, Machine, Status
+from sympy.physics.vector.printing import params
+
+from py_bot.utils import generate_unique_hash
 
 LOCAL_ROOT_DIR = Path(__file__).parent
 LOCAL_TEMP_DIR = LOCAL_ROOT_DIR / ".temp"
@@ -57,46 +60,38 @@ async def job_await(job, interval: float = 5.0, timeout=None) -> None:
         await asyncio.sleep(interval)
 
 
-async def run_repo_job(repo_dir: str, job_name: str):
+async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str):
     """Download the full repo at `ref` into a tempdir, look for config and execute the job."""
-    # Try to load the config file
-    cfg_path = os.path.join(repo_dir, ".lightning/actions.yaml")
-    if not os.path.exists(cfg_path):
-        return False, f"No config found at {cfg_path!r}"
-
-    try:  # todo: add specific exception and yaml validation
-        cfg_text = Path(cfg_path).read_text()
-        config = yaml.safe_load(cfg_text)
-        # mandatory
-        config_run = config["run"]
-        # optional
-        docker_run_image = config.get("image", "ubuntu:22.04")
-        config_env = config.get("env", {})
-    except Exception as e:
-        return False, f"Error parsing config: {e!s}"
+    # mandatory
+    config_run = config["run"]
+    # optional
+    docker_run_image = params.get("image") or config.get("image", "ubuntu:22.04")
+    config_env = config.get("env", {})
+    config_env.update(params)  # add params to env
 
     cmd_run = os.linesep.join(["ls -lah", config_run])
     # print(f"CMD: {cmd_run}")
-    docker_run_script = ".lightning-actions.sh"
+    docker_run_script = f".lightning-actions-{generate_unique_hash()}.sh"
     cmd_path = os.path.join(repo_dir, docker_run_script)
     # assert not os.path.isfile(cmd_path), "the expected actions.sh file already exists"  # todo: add unique hash
     # dump the cmd to .lightning/actions.sh
     with open(cmd_path, "w", encoding="utf_8") as fp:
         fp.write(cmd_run + "\n")
     docker_run_env = " ".join([f'-e {k}="{v}"' for k, v in config_env.items()])
+    # todo: at the beginning make copy of the repo_dir to avoid conflicts with other jobs
     job_cmd = (
         "docker run --rm "
         f"-v {repo_dir}:/workspace "
         "-w /workspace "
         f"{docker_run_env} "
         f"{docker_run_image} "
-        f"bash -lc 'ls -lah && cat {docker_run_script} && bash {docker_run_script}'"
+        f"bash -lc 'printenv && ls -lah && cat {docker_run_script} && bash {docker_run_script}'"
     )
     print(f"job >> {job_cmd}")
     job = Job.run(
         name=job_name,
         command=job_cmd,
-        machine=Machine.CPU,
+        machine=Machine.CPU, # todo: parse from config or params
         # interruptible=True,
     )
     await job_await(job)
