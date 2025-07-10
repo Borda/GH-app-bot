@@ -97,7 +97,7 @@ async def run_and_complete(token, owner, repo, ref, repo_dir, task_name, check_i
                 "conclusion": "success" if success else "failure",
                 "output": {
                     "title": f"{task_name} result",
-                    "summary": summary[:64000],
+                    "summary": summary[:MAX_SUMMARY_LENGTH],
                 },
             },
         )

@@ -45,11 +45,7 @@ async def _download_repo_and_extract(owner, repo, ref, token) -> str:
 
 
 async def job_await(job, interval: float = 5.0, timeout=None) -> None:
-    # todo: temp solution until jib has async wait method
-    import asyncio
-
-    from lightning_sdk.status import Status
-
+    # todo: temp solution until job has async wait method
     start = asyncio.get_event_loop().time()
     while True:
         if job.status in (Status.Completed, Status.Stopped, Status.Failed):
