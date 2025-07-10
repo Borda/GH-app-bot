@@ -1,7 +1,7 @@
 from aiohttp import web
 from gidgethub import routing
 
-from py_bot.handling import handle_with_async_task
+from py_bot.handling import handle_with_offloaded_tasks
 from py_bot.on_event import on_pr_synchronize
 
 if __name__ == "__main__":
@@ -12,7 +12,7 @@ if __name__ == "__main__":
     # Create app and store router
     app = web.Application()
     app["router"] = router
-    app.router.add_post("/", handle_with_async_task)
+    app.router.add_post("/", handle_with_offloaded_tasks)
 
     print("starting…")
     web.run_app(app, host="0.0.0.0", port=8080)
