@@ -1,3 +1,5 @@
+import logging
+
 from aiohttp import web
 from gidgethub import routing
 
@@ -5,6 +7,7 @@ from py_bot.handling import handle_with_offloaded_tasks
 from py_bot.on_event import on_pr_synchronize
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
     # Create router and register handlers
     router = routing.Router()
     router.add(on_pr_synchronize, event_type="pull_request", action="synchronize")
@@ -14,5 +17,5 @@ if __name__ == "__main__":
     app["router"] = router
     app.router.add_post("/", handle_with_offloaded_tasks)
 
-    print("starting…")
+    logging.info("starting…")
     web.run_app(app, host="0.0.0.0", port=8080)

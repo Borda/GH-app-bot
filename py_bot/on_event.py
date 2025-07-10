@@ -1,7 +1,9 @@
 import asyncio
 import datetime
+import logging
 import shutil
 from pathlib import Path
+from typing import Any
 
 import aiohttp
 import yaml
@@ -13,11 +15,11 @@ from py_bot.utils import generate_matrix_from_config
 MAX_SUMMARY_LENGTH = 64000
 
 
-async def on_pr_sync_simple(event, gh, *args, **kwargs) -> None:
+async def on_pr_sync_simple(event, gh, *args: Any, **kwargs: Any) -> None:
     owner = event.data["repository"]["owner"]["login"]
     repo = event.data["repository"]["name"]
     head_sha = event.data["pull_request"]["head"]["sha"]
-    print(f"-> pull_request: synchronize -> {owner=} {repo=} {head_sha=}")
+    logging.debug(f"-> pull_request: synchronize -> {owner=} {repo=} {head_sha=}")
 
     # 1) Create an in_progress check run
     check = await gh.post(
@@ -50,7 +52,7 @@ async def on_pr_sync_simple(event, gh, *args, **kwargs) -> None:
     )
 
 
-async def on_pr_synchronize(event, gh, token, *args, **kwargs) -> None:
+async def on_pr_synchronize(event, gh, token: str, *args: Any, **kwargs: Any) -> None:
     owner = event.data["repository"]["owner"]["login"]
     repo = event.data["repository"]["name"]
     head_sha = event.data["pull_request"]["head"]["sha"]
@@ -78,7 +80,7 @@ async def on_pr_synchronize(event, gh, token, *args, **kwargs) -> None:
     tasks = []
     for i, params in enumerate(parameters):
         task_name = f"Lit Job ({', '.join(params.values())})"
-        print(f"=> pull_request: synchronize -> {task_name=}")
+        logging.debug(f"=> pull_request: synchronize -> {task_name=}")
 
         # Create check run
         check = await gh.post(
@@ -121,7 +123,7 @@ async def run_and_complete(
     # run the job with docker in the repo directory
     job_name = f"ci-run_{owner}-{repo}-{ref}-{task_name.replace(' ', '_')}"
     success, summary = await run_repo_job(config=config, params=params, repo_dir=repo_dir, job_name=job_name)
-    print(f"job '{job_name}' finished with {success}")
+    logging.debug(f"job '{job_name}' finished with {success}")
 
     # open its own session & GitHubAPI to patch the check-run
     async with aiohttp.ClientSession() as session:

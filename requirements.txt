@@ -1,4 +1,4 @@
 aiohttp
 gidgethub
-lightning_sdk
+lightning_sdk >= 2025.07.10
 PyYAML

@@ -1,9 +1,11 @@
 import asyncio
 import io
+import logging
 import os
 import shlex
 import zipfile
 from pathlib import Path
+from typing import Any
 
 import aiohttp
 from lightning_sdk import Job, Machine, Status
@@ -14,13 +16,13 @@ LOCAL_ROOT_DIR = Path(__file__).parent
 LOCAL_TEMP_DIR = LOCAL_ROOT_DIR / ".temp"
 
 
-async def run_sleeping_task(*args, **kwargs):
+async def run_sleeping_task(*args: Any, **kwargs: Any):
     # Replace it with real logic; here we just succeed
     await asyncio.sleep(60)
     return True
 
 
-async def _download_repo_and_extract(owner, repo, ref, token) -> str:
+async def _download_repo_and_extract(owner: str, repo: str, ref: str, token: str) -> str:
     """Download a GitHub repository at a specific ref (branch, tag, commit) and extract it to a temp directory."""
     # 1) Fetch zipball archive
     url = f"https://api.github.com/repos/{owner}/{repo}/zipball/{ref}"
@@ -31,7 +33,7 @@ async def _download_repo_and_extract(owner, repo, ref, token) -> str:
     async with aiohttp.ClientSession() as session, session.get(url, headers=headers) as resp:
         resp.raise_for_status()
         archive_data = await resp.read()
-    print(f"Pull repo from {url}")
+    logging.debug(f"Pull repo from {url}")
 
     # 2) Extract zip into a temp directory
     tempdir = LOCAL_TEMP_DIR.resolve()
@@ -44,19 +46,6 @@ async def _download_repo_and_extract(owner, repo, ref, token) -> str:
     if not children:
         return ""
     return os.path.join(tempdir, children[0])
-
-
-async def job_await(job, interval: float = 5.0, timeout=None) -> None:
-    # todo: temp solution until job has async wait method
-    start = asyncio.get_event_loop().time()
-    while True:
-        if job.status in (Status.Completed, Status.Stopped, Status.Failed):
-            break
-
-        if timeout is not None and asyncio.get_event_loop().time() - start > timeout:
-            raise TimeoutError("Job didn't finish within the provided timeout.")
-
-        await asyncio.sleep(interval)
 
 
 async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str):
@@ -95,14 +84,14 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
         f" {docker_run_env} {docker_run_image}"
         f" bash -lc '{docker_run_cmd}'"
     )
-    print(f"job >> {job_cmd}")
+    logging.debug(f"job >> {job_cmd}")
     job = Job.run(
         name=job_name,
         command=job_cmd,
         machine=docker_run_machine,
         interruptible=config.get("interruptible", False),
     )
-    await job_await(job)
+    await job.async_wait()  # wait for the job to finish
 
     success = job.status == Status.Completed
     # todo: cleanup job if needed or success
