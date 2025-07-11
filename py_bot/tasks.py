@@ -105,9 +105,9 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
     boxed_cmds = "\n".join(f'box "{cmd}"' for cmd in commands)
     # 4) Build the full Docker‐run call using a heredoc
     job_cmd = (
-        f"docker run --rm -i"
+        "docker run --rm -i"
         f" -v {repo_dir}:/temp_repo"
-        f" -w /workspace"
+        " -w /workspace"
         f" {docker_run_env} {docker_run_image}"
         " bash -s << 'EOF'\n"
         f"{box_func}\n"
