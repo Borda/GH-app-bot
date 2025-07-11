@@ -22,7 +22,7 @@ async def run_sleeping_task(*args: Any, **kwargs: Any):
     return True
 
 
-async def _download_repo_and_extract(owner: str, repo: str, ref: str, token: str) -> str:
+async def _download_repo_and_extract(owner: str, repo: str, ref: str, token: str) -> Path:
     """Download a GitHub repository at a specific ref (branch, tag, commit) and extract it to a temp directory."""
     # 1) Fetch zipball archive
     url = f"https://api.github.com/repos/{owner}/{repo}/zipball/{ref}"
@@ -39,13 +39,14 @@ async def _download_repo_and_extract(owner: str, repo: str, ref: str, token: str
     tempdir = LOCAL_TEMP_DIR.resolve()
     tempdir.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(io.BytesIO(archive_data)) as zf:
+        # 1) Grab the first entry in the archive’s name list
+        first_path = zf.namelist()[0]  # e.g. "repo-owner-repo-sha1234abcd/"
+        root_folder = first_path.split("/", 1)[0]
+        # 2) Extract everything
         zf.extractall(tempdir)
 
     # 3) Locate the extracted root folder
-    children = os.listdir(tempdir)
-    if not children:
-        return ""
-    return os.path.join(tempdir, children[0])
+    return tempdir / root_folder
 
 
 async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str):

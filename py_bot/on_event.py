@@ -62,7 +62,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
 
     # 1) Download the repository at the specified ref
     repo_dir = await _download_repo_and_extract(owner, repo, head_sha, token)
-    if not repo_dir:
+    if not repo_dir.is_dir():
         raise RuntimeError(f"Failed to download or extract repo {owner}/{repo} at {head_sha}")
 
     # 2) Read the config file
