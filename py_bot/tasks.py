@@ -70,14 +70,21 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
     assert os.path.isfile(cmd_path), "missing the created actions script"
     await asyncio.sleep(3)  # todo: wait for the file to be written, likely Job sync issue
     docker_run_env = " ".join([f"-e {k}={shlex.quote(str(v))}" for k, v in config_env.items()])
-    # at the beginning make copy of the repo_dir to avoid conflicts with other jobs
-    docker_run_cmd = " && ".join([
+    # set desired wrap width
+    wrap_cmd = f"fold -w 120 -s"
+    # list of core commands to run
+    run_cmds = [
         "printenv",
+        # at the beginning make copy of the repo_dir to avoid conflicts with other jobs
         "cp -r /temp_repo/. /workspace/",
         "ls -lah",
         f"cat {docker_run_script}",
-        f"bash {docker_run_script}",
-    ])
+        f"bash {docker_run_script}"
+    ]
+    # wrap each one (capturing stdout+stderr) and join with &&
+    docker_run_cmd = " && ".join(
+        f"{cmd} 2>&1 | {wrap_cmd}" for cmd in run_cmds
+    )
     job_cmd = (
         "docker run --rm"
         f" -v {repo_dir}:/temp_repo"
