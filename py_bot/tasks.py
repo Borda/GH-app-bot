@@ -15,6 +15,27 @@ from py_bot.utils import generate_unique_hash
 
 LOCAL_ROOT_DIR = Path(__file__).parent
 LOCAL_TEMP_DIR = LOCAL_ROOT_DIR / ".temp"
+BASH_BOX_FUNC = textwrap.dedent("""\
+      box() {
+        local cmd="$1"
+        local tmp;  tmp=$(mktemp)
+        local max=0
+        local line
+        while IFS= read -r line; do
+          echo "$line" >> "$tmp"
+          local len=${#line}
+          (( len > max )) && max=$len
+        done < <(eval "$cmd" 2>&1)
+
+        local border; border=$(printf '%*s' "$max" '' | tr ' ' '=')
+        printf "+%s+\\n" "$border"
+        while IFS= read -r l; do
+          printf "| %-${max}s |\\n" "$l"
+        done < "$tmp"
+        printf "+%s+\\n" "$border"
+        rm "$tmp"
+      }
+    """)
 
 
 async def run_sleeping_task(*args: Any, **kwargs: Any):
@@ -72,27 +93,6 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
     await asyncio.sleep(3)  # todo: wait for the file to be written, likely Job sync issue
     docker_run_env = " ".join([f"-e {k}={shlex.quote(str(v))}" for k, v in config_env.items()])
     # 1) Define your box() helper as a Bash function
-    box_func = textwrap.dedent("""\
-      box() {
-        local cmd="$1"
-        local tmp;  tmp=$(mktemp)
-        local max=0
-        local line
-        while IFS= read -r line; do
-          echo "$line" >> "$tmp"
-          local len=${#line}
-          (( len > max )) && max=$len
-        done < <(eval "$cmd" 2>&1)
-
-        local border; border=$(printf '%*s' "$max" '' | tr ' ' '-')
-        printf "+%s+\\n" "$border"
-        while IFS= read -r l; do
-          printf "| %-${max}s |\\n" "$l"
-        done < "$tmp"
-        printf "+%s+\\n" "$border"
-        rm "$tmp"
-      }
-    """)
     # 2) List the commands you want to run inside the box
     commands = [
         "printenv",
@@ -110,7 +110,7 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
         f" -w /workspace"
         f" {docker_run_env} {docker_run_image}"
         " bash -s << 'EOF'\n"
-        f"{box_func}\n"
+        f"{BASH_BOX_FUNC}\n"
         f"{boxed_cmds}\n"
         "EOF"
     )
