@@ -83,14 +83,14 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
     ]
     # wrap each one (capturing stdout+stderr) and join with &&
     docker_run_cmd = " && ".join(
-        f"{cmd} 2>&1 | {wrap_cmd}" for cmd in run_cmds
+        f"{cmd} | boxes -d minimal" for cmd in run_cmds
     )
     job_cmd = (
         "docker run --rm"
         f" -v {repo_dir}:/temp_repo"
         " -w /workspace"
         f" {docker_run_env} {docker_run_image}"
-        f" bash -lc '{docker_run_cmd}'"
+        f" bash -lc 'apt-get update && apt-get install -y --no-install-recommends boxes && {docker_run_cmd}'"
     )
     logging.debug(f"job >> {job_cmd}")
     job = Job.run(
