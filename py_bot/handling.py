@@ -10,6 +10,14 @@ from gidgethub import sansio
 from gidgethub.aiohttp import GitHubAPI
 from gidgethub.apps import get_installation_access_token
 
+GITHUB_APP_ID = os.getenv("GITHUB_APP_ID")
+assert GITHUB_APP_ID, "`GITHUB_APP_ID` must be set in environment variables"
+_PRIVATE_KEY_PATH = os.getenv("PRIVATE_KEY_PATH")
+assert _PRIVATE_KEY_PATH, "`PRIVATE_KEY_PATH` must be set in environment variables"
+PRIVATE_KEY_PATH = Path(_PRIVATE_KEY_PATH).expanduser().resolve()
+assert PRIVATE_KEY_PATH.is_file(), f"Private key file not found at {PRIVATE_KEY_PATH}"
+WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
+
 # async def handle_webhook(request):
 #     print("=== webhook hit ===")
 #     body = await request.read()
@@ -46,10 +54,9 @@ from gidgethub.apps import get_installation_access_token
 
 async def process_async_event(event, router):
     """Authenticate, exchange tokens, and dispatch the event to the router."""
-    app_id = os.getenv("GITHUB_APP_ID")
-    private_key = Path(os.getenv("PRIVATE_KEY_PATH")).read_bytes()
+    private_key = PRIVATE_KEY_PATH.read_text()
     jwt_token = jwt.encode(
-        {"iat": int(time.time()) - 60, "exp": int(time.time()) + (10 * 60), "iss": app_id},
+        {"iat": int(time.time()) - 60, "exp": int(time.time()) + (10 * 60), "iss": GITHUB_APP_ID},
         private_key,
         algorithm="RS256",
     )
@@ -59,7 +66,7 @@ async def process_async_event(event, router):
         app_gh = GitHubAPI(session, "pr-status-bot", oauth_token=jwt_token)
         inst_id = event.data["installation"]["id"]
         token_resp = await get_installation_access_token(
-            app_gh, installation_id=inst_id, app_id=app_id, private_key=private_key
+            app_gh, installation_id=inst_id, app_id=GITHUB_APP_ID, private_key=private_key
         )
         inst_token = token_resp["token"]
 
@@ -71,8 +78,7 @@ async def process_async_event(event, router):
 async def handle_with_offloaded_tasks(request):
     """Minimal HTTP handler: read the webhook, schedule processing, and ack."""
     body = await request.read()
-    secret = os.getenv("WEBHOOK_SECRET", "")
-    event = sansio.Event.from_http(request.headers, body, secret=secret)
+    event = sansio.Event.from_http(request.headers, body, secret=WEBHOOK_SECRET)
 
     # Get router from request app
     router = request.app["router"]

@@ -2,15 +2,13 @@ import asyncio
 import datetime
 import logging
 import shutil
-from pathlib import Path
 from typing import Any
 
 import aiohttp
-import yaml
 from gidgethub.aiohttp import GitHubAPI
 
 from py_bot.tasks import _download_repo_and_extract, run_repo_job, run_sleeping_task
-from py_bot.utils import generate_matrix_from_config
+from py_bot.utils import generate_matrix_from_config, load_configs_from_folder
 
 MAX_SUMMARY_LENGTH = 64000
 
@@ -63,53 +61,45 @@ async def on_pr_synchronize(event, gh, token: str, *args: Any, **kwargs: Any) ->
         raise RuntimeError(f"Failed to download or extract repo {owner}/{repo} at {head_sha}")
 
     # 2) Read the config file
-    cfg_path = Path(repo_dir) / ".lightning" / "actions.yaml"
-    if not cfg_path.exists():
-        raise FileNotFoundError(f"No config found at {cfg_path!r}")
-
-    try:  # todo: add specific exception and yaml validation
-        config = yaml.safe_load(cfg_path.read_text())
-    except yaml.YAMLError as e:
-        raise RuntimeError(f"YAML parsing error in config file: {e!s}")
-    except OSError as e:
-        raise RuntimeError(f"File error while reading config: {e!s}")
-
-    parameters = generate_matrix_from_config(config.get("parametrize", {}))
+    configs = load_configs_from_folder(repo_dir)
 
     # 2) Launch check runs for each job
     tasks = []
-    for i, params in enumerate(parameters):
-        task_name = f"Lit Job ({', '.join(params.values())})"
-        logging.debug(f"=> pull_request: synchronize -> {task_name=}")
+    for cfg_file, config in configs:
+        parameters = generate_matrix_from_config(config.get("parametrize", {}))
+        for i, params in enumerate(parameters):
+            name = params.get("name") or config.get("name", "Lit Job")
+            task_name = f"{cfg_file} / {name} ({', '.join(params.values())})"
+            logging.debug(f"=> pull_request: synchronize -> {task_name=}")
 
-        # Create check run
-        check = await gh.post(
-            f"/repos/{owner}/{repo}/check-runs",
-            data={
-                "name": task_name,
-                "head_sha": head_sha,
-                "status": "in_progress",
-                "started_at": datetime.datetime.utcnow().isoformat() + "Z",
-            },
-        )
-        check_id = check["id"]
+            # Create check run
+            check = await gh.post(
+                f"/repos/{owner}/{repo}/check-runs",
+                data={
+                    "name": task_name,
+                    "head_sha": head_sha,
+                    "status": "in_progress",
+                    "started_at": datetime.datetime.utcnow().isoformat() + "Z",
+                },
+            )
+            check_id = check["id"]
 
-        # detach with only the token, owner, repo, etc.
-        tasks.append(
-            asyncio.create_task(
-                run_and_complete(
-                    token=token,
-                    owner=owner,
-                    repo=repo,
-                    ref=head_sha,
-                    config=config,
-                    params=params,
-                    repo_dir=repo_dir,
-                    task_name=task_name,
-                    check_id=check_id,
+            # detach with only the token, owner, repo, etc.
+            tasks.append(
+                asyncio.create_task(
+                    run_and_complete(
+                        token=token,
+                        owner=owner,
+                        repo=repo,
+                        ref=head_sha,
+                        config=config,
+                        params=params,
+                        repo_dir=repo_dir,
+                        task_name=task_name,
+                        check_id=check_id,
+                    )
                 )
             )
-        )
 
     # 3) Wait for all tasks to complete
     await asyncio.gather(*tasks)

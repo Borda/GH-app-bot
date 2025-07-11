@@ -1,7 +1,11 @@
+import glob
 import hashlib
 import itertools
 import os
 import time
+from pathlib import Path
+
+import yaml
 
 _RESTRICTED_PARAMETERS = ("env", "run")
 
@@ -81,3 +85,30 @@ def generate_unique_hash(length=16):
     unique_string = f"{time.time()}{os.getpid()}"
     hash_object = hashlib.md5(unique_string.encode())
     return hash_object.hexdigest()[:length]
+
+
+def load_configs_from_folder(path_dir: str = ".lightning/workflows") -> list[tuple[str, dict]]:
+    """List all configuration files in the given path."""
+    path_dir = Path(path_dir).resolve()
+    if not path_dir.is_dir():
+        raise ValueError(f"Provided path is not a directory: {path_dir}")
+
+    ls_files = glob.glob(str(path_dir / "*.yaml")) + glob.glob(str(path_dir / "*.yml"))
+    if not ls_files:
+        return []
+
+    configs = []
+    for cfg_path in sorted(ls_files):
+        try:  # todo: add specific exception and yaml validation
+            content = Path(cfg_path).read_text(encoding="utf_8")
+            config = yaml.safe_load(content)
+        except yaml.YAMLError as e:
+            raise RuntimeError(f"YAML parsing error in config file: {e!s}")
+        except OSError as e:
+            raise RuntimeError(f"File error while reading config: {e!s}")
+        if not isinstance(config, dict):
+            raise ValueError(f"Invalid config file format: {cfg_path}")
+        if not config:
+            raise ValueError(f"Empty config file: {cfg_path}")
+        configs.append((Path(cfg_path).name, config))
+    return configs
