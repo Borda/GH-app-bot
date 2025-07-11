@@ -54,7 +54,7 @@ WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
 
 async def process_async_event(event, router):
     """Authenticate, exchange tokens, and dispatch the event to the router."""
-    private_key = PRIVATE_KEY_PATH.read_text()
+    private_key = PRIVATE_KEY_PATH.read_bytes()
     jwt_token = jwt.encode(
         {"iat": int(time.time()) - 60, "exp": int(time.time()) + (10 * 60), "iss": GITHUB_APP_ID},
         private_key,
@@ -66,7 +66,7 @@ async def process_async_event(event, router):
         app_gh = GitHubAPI(session, "pr-status-bot", oauth_token=jwt_token)
         inst_id = event.data["installation"]["id"]
         token_resp = await get_installation_access_token(
-            app_gh, installation_id=inst_id, app_id=GITHUB_APP_ID, private_key=private_key
+            app_gh, installation_id=inst_id, app_id=int(GITHUB_APP_ID), private_key=private_key
         )
         inst_token = token_resp["token"]
 
