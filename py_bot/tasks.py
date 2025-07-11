@@ -3,6 +3,7 @@ import io
 import logging
 import os
 import shlex
+import textwrap
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -70,27 +71,39 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
     assert os.path.isfile(cmd_path), "missing the created actions script"
     await asyncio.sleep(3)  # todo: wait for the file to be written, likely Job sync issue
     docker_run_env = " ".join([f"-e {k}={shlex.quote(str(v))}" for k, v in config_env.items()])
-    # set desired wrap width
-    wrap_cmd = f"fold -w 120 -s"
-    # list of core commands to run
-    run_cmds = [
+    # 1) Define your box() helper as a Bash function
+    box_func = textwrap.dedent("""\
+      box() {
+        local width=${BOX_WIDTH:-40}
+        local sep
+        sep=$(printf '%*s' "$width" '' | tr ' ' '-')
+        echo "+${sep}+"
+        eval "$1" 2>&1 \
+          | fold -s -w "$width" \
+          | sed -e 's/^/| /' -e 's/$/ |/'
+        echo "+${sep}+"
+      }
+    """)
+    # 2) List the commands you want to run inside the box
+    commands = [
         "printenv",
-        # at the beginning make copy of the repo_dir to avoid conflicts with other jobs
         "cp -r /temp_repo/. /workspace/",
         "ls -lah",
         f"cat {docker_run_script}",
-        f"bash {docker_run_script}"
+        f"bash {docker_run_script}",
     ]
-    # wrap each one (capturing stdout+stderr) and join with &&
-    docker_run_cmd = " && ".join(
-        f"{cmd} | boxes -d plain" for cmd in run_cmds
-    )
+    # 3) Prefix each with `box "<cmd>"`
+    boxed_cmds = "\n".join(f'box "{cmd}"' for cmd in commands)
+    # 4) Build the full Docker‐run call using a heredoc
     job_cmd = (
-        "docker run --rm"
+        f"docker run --rm -i"
         f" -v {repo_dir}:/temp_repo"
-        " -w /workspace"
+        f" -w /workspace"
         f" {docker_run_env} {docker_run_image}"
-        f" bash -lc 'apt-get update && apt-get install -y --no-install-recommends boxes && {docker_run_cmd}'"
+        " bash -s << 'EOF'\n"
+        f"{box_func}\n"
+        f"{boxed_cmds}\n"
+        "EOF"
     )
     logging.debug(f"job >> {job_cmd}")
     job = Job.run(
