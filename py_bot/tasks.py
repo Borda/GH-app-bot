@@ -74,14 +74,23 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
     # 1) Define your box() helper as a Bash function
     box_func = textwrap.dedent("""\
       box() {
-        local width=${BOX_WIDTH:-40}
-        local sep
-        sep=$(printf '%*s' "$width" '' | tr ' ' '-')
-        echo "+${sep}+"
-        eval "$1" 2>&1 \
-          | fold -s -w "$width" \
-          | sed -e 's/^/| /' -e 's/$/ |/'
-        echo "+${sep}+"
+        local cmd="$1"
+        local tmp;  tmp=$(mktemp)
+        local max=0
+        local line
+        while IFS= read -r line; do
+          echo "$line" >> "$tmp"
+          local len=${#line}
+          (( len > max )) && max=$len
+        done < <(eval "$cmd" 2>&1)
+
+        local border; border=$(printf '%*s' "$max" '' | tr ' ' '-')
+        printf "+%s+\\n" "$border"
+        while IFS= read -r l; do
+          printf "| %-${max}s |\\n" "$l"
+        done < "$tmp"
+        printf "+%s+\\n" "$border"
+        rm "$tmp"
       }
     """)
     # 2) List the commands you want to run inside the box
