@@ -4,13 +4,14 @@ from aiohttp import web
 from gidgethub import routing
 
 from py_bot.handling import handle_with_offloaded_tasks
-from py_bot.on_event import on_pr_synchronize
+from py_bot.on_event import on_code_changed
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
     # Create router and register handlers
     router = routing.Router()
-    router.add(on_pr_synchronize, event_type="pull_request", action="synchronize")
+    router.add(on_code_changed, event_type="pull_request", action="synchronize")
+    router.add(on_code_changed, event_type="push")
 
     # Create app and store router
     app = web.Application()

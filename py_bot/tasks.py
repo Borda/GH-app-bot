@@ -3,6 +3,7 @@ import io
 import logging
 import os
 import shlex
+import textwrap
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,27 @@ from py_bot.utils import generate_unique_hash
 
 LOCAL_ROOT_DIR = Path(__file__).parent
 LOCAL_TEMP_DIR = LOCAL_ROOT_DIR / ".temp"
+BASH_BOX_FUNC = textwrap.dedent("""\
+      box() {
+        local cmd="$1"
+        local tmp;  tmp=$(mktemp)
+        local max=0
+        local line
+        while IFS= read -r line; do
+          echo "$line" >> "$tmp"
+          local len=${#line}
+          (( len > max )) && max=$len
+        done < <(eval "$cmd" 2>&1)
+
+        local border; border=$(printf '%*s' "$max" '' | tr ' ' '=')
+        printf "+%s+\\n" "$border"
+        while IFS= read -r l; do
+          printf "| %-${max}s |\\n" "$l"
+        done < "$tmp"
+        printf "+%s+\\n" "$border"
+        rm "$tmp"
+      }
+    """)
 
 
 async def run_sleeping_task(*args: Any, **kwargs: Any):
@@ -22,7 +44,7 @@ async def run_sleeping_task(*args: Any, **kwargs: Any):
     return True
 
 
-async def _download_repo_and_extract(owner: str, repo: str, ref: str, token: str) -> str:
+async def _download_repo_and_extract(owner: str, repo: str, ref: str, token: str) -> Path:
     """Download a GitHub repository at a specific ref (branch, tag, commit) and extract it to a temp directory."""
     # 1) Fetch zipball archive
     url = f"https://api.github.com/repos/{owner}/{repo}/zipball/{ref}"
@@ -39,13 +61,14 @@ async def _download_repo_and_extract(owner: str, repo: str, ref: str, token: str
     tempdir = LOCAL_TEMP_DIR.resolve()
     tempdir.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(io.BytesIO(archive_data)) as zf:
+        # 1) Grab the first entry in the archive’s name list
+        first_path = zf.namelist()[0]  # e.g. "repo-owner-repo-sha1234abcd/"
+        root_folder = first_path.split("/", 1)[0]
+        # 2) Extract everything
         zf.extractall(tempdir)
 
     # 3) Locate the extracted root folder
-    children = os.listdir(tempdir)
-    if not children:
-        return ""
-    return os.path.join(tempdir, children[0])
+    return tempdir / root_folder
 
 
 async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str):
@@ -69,20 +92,27 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
     assert os.path.isfile(cmd_path), "missing the created actions script"
     await asyncio.sleep(3)  # todo: wait for the file to be written, likely Job sync issue
     docker_run_env = " ".join([f"-e {k}={shlex.quote(str(v))}" for k, v in config_env.items()])
-    # at the beginning make copy of the repo_dir to avoid conflicts with other jobs
-    docker_run_cmd = " && ".join([
+    # 1) Define your box() helper as a Bash function
+    # 2) List the commands you want to run inside the box
+    commands = [
         "printenv",
         "cp -r /temp_repo/. /workspace/",
         "ls -lah",
         f"cat {docker_run_script}",
         f"bash {docker_run_script}",
-    ])
+    ]
+    # 3) Prefix each with `box "<cmd>"`
+    boxed_cmds = "\n".join(f'box "{cmd}"' for cmd in commands)
+    # 4) Build the full Docker‐run call using a heredoc
     job_cmd = (
-        "docker run --rm"
+        "docker run --rm -i"
         f" -v {repo_dir}:/temp_repo"
         " -w /workspace"
         f" {docker_run_env} {docker_run_image}"
-        f" bash -lc '{docker_run_cmd}'"
+        " bash -s << 'EOF'\n"
+        f"{BASH_BOX_FUNC}\n"
+        f"{boxed_cmds}\n"
+        "EOF"
     )
     logging.debug(f"job >> {job_cmd}")
     job = Job.run(
