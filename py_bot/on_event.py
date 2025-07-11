@@ -53,10 +53,7 @@ MAX_SUMMARY_LENGTH = 64000
 
 async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> None:
     # figure out the commit SHA
-    if event.event == "push":
-        head_sha = event.data["after"]
-    else:  # pull_request synchronize
-        head_sha = event.data["pull_request"]["head"]["sha"]
+    head_sha = event.data["after"] if event.event == "push" else event.data["pull_request"]["head"]["sha"]
     owner = event.data["repository"]["owner"]["login"]
     repo = event.data["repository"]["name"]
 
