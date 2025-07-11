@@ -83,7 +83,7 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
     ]
     # wrap each one (capturing stdout+stderr) and join with &&
     docker_run_cmd = " && ".join(
-        f"{cmd} | boxes -d minimal" for cmd in run_cmds
+        f"{cmd} | boxes -d plain" for cmd in run_cmds
     )
     job_cmd = (
         "docker run --rm"
