@@ -8,7 +8,7 @@ from typing import Any
 import aiohttp
 from gidgethub.aiohttp import GitHubAPI
 
-from py_bot.tasks import _download_repo_and_extract, run_repo_job, run_sleeping_task
+from py_bot.tasks import _download_repo_and_extract, run_repo_job
 from py_bot.utils import generate_matrix_from_config, load_configs_from_folder
 
 MAX_SUMMARY_LENGTH = 64000
@@ -58,7 +58,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
     else:  # pull_request synchronize
         head_sha = event.data["pull_request"]["head"]["sha"]
     owner = event.data["repository"]["owner"]["login"]
-    repo  = event.data["repository"]["name"]
+    repo = event.data["repository"]["name"]
 
     # 1) Download the repository at the specified ref
     repo_dir = await _download_repo_and_extract(owner, repo, head_sha, token)
