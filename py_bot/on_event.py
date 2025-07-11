@@ -2,6 +2,7 @@ import asyncio
 import datetime
 import logging
 import shutil
+from pathlib import Path
 from typing import Any
 
 import aiohttp
@@ -61,7 +62,21 @@ async def on_pr_synchronize(event, gh, token: str, *args: Any, **kwargs: Any) ->
         raise RuntimeError(f"Failed to download or extract repo {owner}/{repo} at {head_sha}")
 
     # 2) Read the config file
-    configs = load_configs_from_folder(repo_dir)
+    repo_dir = Path(repo_dir).resolve()
+    configs = load_configs_from_folder(repo_dir / ".lightning" / "workflows")
+    if not configs:
+        logging.warn(f"No valid configs found in {repo_dir / '.lightning' / 'workflows'}")
+        await gh.post(
+            f"/repos/{owner}/{repo}/check-runs",
+            data={
+                "name": "Lit bot",
+                "head_sha": head_sha,
+                "status": "cancelled",
+                "started_at": datetime.datetime.utcnow().isoformat() + "Z",
+            },
+        )
+        shutil.rmtree(repo_dir, ignore_errors=True)
+        return
 
     # 2) Launch check runs for each job
     tasks = []

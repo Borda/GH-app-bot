@@ -4,6 +4,7 @@ import itertools
 import os
 import time
 from pathlib import Path
+from typing import Union
 
 import yaml
 
@@ -87,7 +88,7 @@ def generate_unique_hash(length=16):
     return hash_object.hexdigest()[:length]
 
 
-def load_configs_from_folder(path_dir: str = ".lightning/workflows") -> list[tuple[str, dict]]:
+def load_configs_from_folder(path_dir: Union[str, Path] = ".lightning/workflows") -> list[tuple[str, dict]]:
     """List all configuration files in the given path."""
     path_dir = Path(path_dir).resolve()
     if not path_dir.is_dir():
