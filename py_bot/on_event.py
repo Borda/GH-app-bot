@@ -14,47 +14,51 @@ from py_bot.utils import generate_matrix_from_config, load_configs_from_folder
 MAX_SUMMARY_LENGTH = 64000
 
 
-async def on_pr_sync_simple(event, gh, *args: Any, **kwargs: Any) -> None:
+# async def on_pr_sync_simple(event, gh, *args: Any, **kwargs: Any) -> None:
+#     owner = event.data["repository"]["owner"]["login"]
+#     repo = event.data["repository"]["name"]
+#     head_sha = event.data["pull_request"]["head"]["sha"]
+#     logging.debug(f"-> pull_request: synchronize -> {owner=} {repo=} {head_sha=}")
+#
+#     # 1) Create an in_progress check run
+#     check = await gh.post(
+#         f"/repos/{owner}/{repo}/check-runs",
+#         data={
+#             "name": "PR Extra Task",
+#             "head_sha": head_sha,
+#             "status": "in_progress",
+#             "started_at": datetime.utcnow().isoformat() + "Z",
+#         },
+#     )
+#     check_id = check["id"]
+#
+#     # 2) Run your custom task (e.g., lint, tests…)
+#     success = await run_sleeping_task(event)
+#
+#     # 3) Complete the check run
+#     conclusion = "success" if success else "failure"
+#     await gh.patch(
+#         f"/repos/{owner}/{repo}/check-runs/{check_id}",
+#         data={
+#             "status": "completed",
+#             "completed_at": datetime.utcnow().isoformat() + "Z",
+#             "conclusion": conclusion,
+#             "output": {
+#                 "title": "Extra Task Results",
+#                 "summary": "All checks passed!" if success else "Some checks failed.",
+#             },
+#         },
+#     )
+
+
+async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> None:
+    # figure out the commit SHA
+    if event.event == "push":
+        head_sha = event.data["after"]
+    else:  # pull_request synchronize
+        head_sha = event.data["pull_request"]["head"]["sha"]
     owner = event.data["repository"]["owner"]["login"]
-    repo = event.data["repository"]["name"]
-    head_sha = event.data["pull_request"]["head"]["sha"]
-    logging.debug(f"-> pull_request: synchronize -> {owner=} {repo=} {head_sha=}")
-
-    # 1) Create an in_progress check run
-    check = await gh.post(
-        f"/repos/{owner}/{repo}/check-runs",
-        data={
-            "name": "PR Extra Task",
-            "head_sha": head_sha,
-            "status": "in_progress",
-            "started_at": datetime.utcnow().isoformat() + "Z",
-        },
-    )
-    check_id = check["id"]
-
-    # 2) Run your custom task (e.g., lint, tests…)
-    success = await run_sleeping_task(event)
-
-    # 3) Complete the check run
-    conclusion = "success" if success else "failure"
-    await gh.patch(
-        f"/repos/{owner}/{repo}/check-runs/{check_id}",
-        data={
-            "status": "completed",
-            "completed_at": datetime.utcnow().isoformat() + "Z",
-            "conclusion": conclusion,
-            "output": {
-                "title": "Extra Task Results",
-                "summary": "All checks passed!" if success else "Some checks failed.",
-            },
-        },
-    )
-
-
-async def on_pr_synchronize(event, gh, token: str, *args: Any, **kwargs: Any) -> None:
-    owner = event.data["repository"]["owner"]["login"]
-    repo = event.data["repository"]["name"]
-    head_sha = event.data["pull_request"]["head"]["sha"]
+    repo  = event.data["repository"]["name"]
 
     # 1) Download the repository at the specified ref
     repo_dir = await _download_repo_and_extract(owner, repo, head_sha, token)
