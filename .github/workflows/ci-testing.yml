@@ -39,7 +39,7 @@ jobs:
       - name: Install package & dependencies
         run: |
           pip --version
-          pip install . pytest -U -q
+          pip install -U -q -r requirements.txt pytest
           pip list
 
       - name: Tests
