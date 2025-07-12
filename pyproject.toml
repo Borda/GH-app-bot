@@ -1,7 +1,3 @@
-[metadata]
-license_file = "LICENSE"
-description-file = "README.md"
-
 [build-system]
 requires = [
     "setuptools",
@@ -62,7 +58,7 @@ blank = true
 
 [tool.ruff]
 line-length = 120
-target-version = 'py38'
+target-version = 'py310'
 exclude = [
     "build",
     "dist",
@@ -93,10 +89,10 @@ ignore = [
     "E731",  # Do not assign a lambda expression, use a def
 ]
 
-[tool.ruff.lint.per-file-ignores]
-"setup.py" = ["D100", "SIM115"]
-"__about__.py" = ["D100"]
-"__init__.py" = ["D100"]
+#[tool.ruff.lint.per-file-ignores]
+#"setup.py" = ["D100", "SIM115"]
+#"__about__.py" = ["D100"]
+#"__init__.py" = ["D100"]
 
 [tool.ruff.lint.pydocstyle]
 # Use Google-style docstrings.
