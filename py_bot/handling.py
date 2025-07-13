@@ -1,7 +1,5 @@
 import asyncio
-import os
 import time
-from pathlib import Path
 
 import aiohttp
 import jwt  # PyJWT
@@ -9,14 +7,6 @@ from aiohttp import web
 from gidgethub import sansio
 from gidgethub.aiohttp import GitHubAPI
 from gidgethub.apps import get_installation_access_token
-
-GITHUB_APP_ID = os.getenv("GITHUB_APP_ID")
-assert GITHUB_APP_ID, "`GITHUB_APP_ID` must be set in environment variables"
-_PRIVATE_KEY_PATH = os.getenv("PRIVATE_KEY_PATH")
-assert _PRIVATE_KEY_PATH, "`PRIVATE_KEY_PATH` must be set in environment variables"
-PRIVATE_KEY_PATH = Path(_PRIVATE_KEY_PATH).expanduser().resolve()
-assert PRIVATE_KEY_PATH.is_file(), f"Private key file not found at {PRIVATE_KEY_PATH}"
-WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
 
 # async def handle_webhook(request):
 #     print("=== webhook hit ===")
@@ -52,11 +42,10 @@ WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
 #         await router.dispatch(event, gh, inst_token)
 
 
-async def process_async_event(event, router):
+async def process_async_event(event, router, github_app_id: str, private_key: str):
     """Authenticate, exchange tokens, and dispatch the event to the router."""
-    private_key = PRIVATE_KEY_PATH.read_bytes()
     jwt_token = jwt.encode(
-        {"iat": int(time.time()) - 60, "exp": int(time.time()) + (10 * 60), "iss": GITHUB_APP_ID},
+        {"iat": int(time.time()) - 60, "exp": int(time.time()) + (10 * 60), "iss": github_app_id},
         private_key,
         algorithm="RS256",
     )
@@ -66,7 +55,7 @@ async def process_async_event(event, router):
         app_gh = GitHubAPI(session, "pr-status-bot", oauth_token=jwt_token)
         inst_id = event.data["installation"]["id"]
         token_resp = await get_installation_access_token(
-            app_gh, installation_id=inst_id, app_id=int(GITHUB_APP_ID), private_key=private_key
+            app_gh, installation_id=inst_id, app_id=int(github_app_id), private_key=private_key
         )
         inst_token = token_resp["token"]
 
@@ -75,16 +64,16 @@ async def process_async_event(event, router):
         await router.dispatch(event, gh, inst_token)
 
 
-async def handle_with_offloaded_tasks(request):
+async def handle_with_offloaded_tasks(request, github_app_id: str, private_key: str, webhooks_secret: str = ""):
     """Minimal HTTP handler: read the webhook, schedule processing, and ack."""
     body = await request.read()
-    event = sansio.Event.from_http(request.headers, body, secret=WEBHOOK_SECRET)
+    event = sansio.Event.from_http(request.headers, body, secret=webhooks_secret)
 
     # Get router from request app
     router = request.app["router"]
 
     # Schedule background processing with router
-    asyncio.create_task(process_async_event(event, router))
+    asyncio.create_task(process_async_event(event, router, github_app_id=github_app_id, private_key=private_key))
 
     # Acknowledge immediately
     return web.Response(status=200)
