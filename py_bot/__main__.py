@@ -1,5 +1,6 @@
 import logging
 import os
+from functools import partial
 from pathlib import Path
 
 from aiohttp import web
@@ -28,10 +29,12 @@ if __name__ == "__main__":
     app["router"] = router
     app.router.add_post(
         "/",
-        handle_with_offloaded_tasks,
-        github_app_id=GITHUB_APP_ID,
-        private_key=private_key_path.read_text(),
-        webhooks_secret=WEBHOOK_SECRET,
+        partial(
+            handle_with_offloaded_tasks,
+            github_app_id=GITHUB_APP_ID,
+            private_key=private_key_path.read_text(),
+            webhooks_secret=WEBHOOK_SECRET,
+        ),
     )
 
     logging.info("starting…")
