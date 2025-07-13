@@ -27,7 +27,7 @@ BASH_BOX_FUNC = textwrap.dedent("""\
           (( len > max )) && max=$len
         done < <(eval "$cmd" 2>&1)
 
-        local border; border=$(printf '%*s' "$max" '' | tr ' ' '=')
+        local border; border=$(printf '%*s' "$max" '' | tr ' ' '-')
         printf "+%s+\\n" "$border"
         while IFS= read -r l; do
           printf "| %-${max}s |\\n" "$l"
@@ -91,30 +91,33 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
         fp.write(cmd_run + os.linesep)
     assert os.path.isfile(cmd_path), "missing the created actions script"
     await asyncio.sleep(3)  # todo: wait for the file to be written, likely Job sync issue
-    docker_run_env = " ".join([f"-e {k}={shlex.quote(str(v))}" for k, v in config_env.items()])
-    # 1) Define your box() helper as a Bash function
-    # 2) List the commands you want to run inside the box
-    commands = [
+    export_envs = [f"export {k}={shlex.quote(str(v))}" for k, v in config_env.items()]
+    # 1) List the commands you want to run inside the box
+    cutoff_str = (">" * 15) + f" CUT LOG {generate_unique_hash(32)} " + ("<" * 15)
+    commands = export_envs + [
         "printenv",
         "cp -r /temp_repo/. /workspace/",
         "ls -lah",
         f"cat {docker_run_script}",
+        f"echo {cutoff_str}",
         f"bash {docker_run_script}",
     ]
-    # 3) Prefix each with `box "<cmd>"`
+    # 2) Prefix each with `box "<cmd>"`
     boxed_cmds = "\n".join(f'box "{cmd}"' for cmd in commands)
-    # 4) Build the full Docker‐run call using a heredoc
+    # 3) Build the full Docker‐run call using a heredoc
     job_cmd = (
         "docker run --rm -i"
         f" -v {repo_dir}:/temp_repo"
         " -w /workspace"
-        f" {docker_run_env} {docker_run_image}"
+        f" {docker_run_image}"
+        # Define your box() helper as a Bash function
         " bash -s << 'EOF'\n"
         f"{BASH_BOX_FUNC}\n"
         f"{boxed_cmds}\n"
         "EOF"
     )
     logging.debug(f"job >> {job_cmd}")
+    # 4) Run the job with the Job.run() method
     job = Job.run(
         name=job_name,
         command=job_cmd,
@@ -124,5 +127,12 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
     await job.async_wait()  # wait for the job to finish
 
     success = job.status == Status.Completed
+    logs = job.logs or "No logs available"
+    if config.get("mode", "default") != "debug":
+        # cut the logs all before the cutoff string
+        cutoff_index = logs.find(cutoff_str)
+        assert cutoff_index != -1, "the cutoff string was not found in the logs"
+        logs = logs[cutoff_index + len(cutoff_str):].strip()
+
     # todo: cleanup job if needed or success
-    return success, f"run finished as {job.status}\n{job.logs}"
+    return success, f"run finished as {job.status}\n{logs}"
