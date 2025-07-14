@@ -146,5 +146,5 @@ def is_triggered_by_event(event: str, branch: str, trigger: Union[dict, list, No
     branches = trigger[event].get("branches", [])
     if branches:
         # Check if the branch is in the list of branches
-        return any(ob == branch for ob in branches)
+        return any(ob == branch for ob in branches)  # todo: update it to reqex
     return True  # if the event is fine but no branch specified

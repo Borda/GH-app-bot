@@ -61,7 +61,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
         branch_ref = event.data["ref"][len("refs/heads/"):]
     else:  # pull_request
         head_sha = event.data["pull_request"]["head"]["sha"]
-        branch_ref = event.data["pull_request"]["head"]["ref"]
+        branch_ref = event.data["pull_request"]["base"]["ref"]
     owner = event.data["repository"]["owner"]["login"]
     repo = event.data["repository"]["name"]
     this_teamspace = Teamspace()
