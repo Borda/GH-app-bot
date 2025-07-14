@@ -7,6 +7,8 @@ from typing import Any
 
 import aiohttp
 from gidgethub.aiohttp import GitHubAPI
+from lightning_sdk import Teamspace
+from lightning_sdk.lightning_cloud.env import LIGHTNING_CLOUD_URL
 
 from py_bot.tasks import _download_repo_and_extract, run_repo_job
 from py_bot.utils import generate_matrix_from_config, load_configs_from_folder
@@ -56,6 +58,8 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
     head_sha = event.data["after"] if event.event == "push" else event.data["pull_request"]["head"]["sha"]
     owner = event.data["repository"]["owner"]["login"]
     repo = event.data["repository"]["name"]
+    this_teamspace = Teamspace()
+    link_lightning_jobs = f"{LIGHTNING_CLOUD_URL}/{this_teamspace.owner.name}/{this_teamspace.name}/jobs/"
 
     # 1) Download the repository at the specified ref
     repo_dir = await _download_repo_and_extract(owner, repo, head_sha, token)
@@ -96,6 +100,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
                     "head_sha": head_sha,
                     "status": "in_progress",
                     "started_at": datetime.datetime.utcnow().isoformat() + "Z",
+                    "details_url": link_lightning_jobs,
                 },
             )
             check_id = check["id"]

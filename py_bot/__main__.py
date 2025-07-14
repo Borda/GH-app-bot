@@ -44,7 +44,7 @@ if __name__ == "__main__":
         partial(
             handle_with_offloaded_tasks,
             github_app_id=github_app_id,
-            private_key=github_app_id,
+            private_key=private_key,
             webhooks_secret=webhook_secret,
         ),
     )
