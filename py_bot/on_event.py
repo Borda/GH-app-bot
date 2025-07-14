@@ -93,6 +93,19 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
     tasks = []
     for cfg_file, config in configs:
         if not is_triggered_by_event(event=event.event, branch=branch_ref, trigger=config.get("trigger")):
+            await gh.post(
+                f"/repos/{owner}/{repo}/check-runs",
+                data={
+                    "name": f"{cfg_file} / {name}",
+                    "head_sha": head_sha,
+                    "status": "skipped",
+                    "started_at": datetime.datetime.utcnow().isoformat() + "Z",
+                    "output": {
+                        "title": "Skipped",
+                        "summary": f"Configuration `{cfg_file}` is not triggered by the event `{event.event}` on branch `{branch_ref}`.",
+                    },
+                },
+            )
             continue  # skip this config if it is not triggered by the event
         parameters = generate_matrix_from_config(config.get("parametrize", {}))
         for i, params in enumerate(parameters):
