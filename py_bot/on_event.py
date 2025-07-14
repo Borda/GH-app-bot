@@ -55,8 +55,13 @@ MAX_SUMMARY_LENGTH = 64000
 
 
 async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> None:
-    # figure out the commit SHA
-    head_sha = event.data["after"] if event.event == "push" else event.data["pull_request"]["head"]["sha"]
+    # figure out the commit SHA and branch ref
+    if event.event == "push":
+        head_sha = event.data["after"]
+        branch_ref = event.data["ref"][len("refs/heads/"):]
+    else:  # pull_request
+        head_sha = event.data["pull_request"]["head"]["sha"]
+        branch_ref = event.data["pull_request"]["head"]["ref"]
     owner = event.data["repository"]["owner"]["login"]
     repo = event.data["repository"]["name"]
     this_teamspace = Teamspace()
@@ -87,8 +92,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
     # 2) Launch check runs for each job
     tasks = []
     for cfg_file, config in configs:
-        pprint(event.data)
-        if not is_triggered_by_event(event=event.event, branch=event.data["ref"], trigger=config.get("trigger")):
+        if not is_triggered_by_event(event=event.event, branch=branch_ref, trigger=config.get("trigger")):
             continue  # skip this config if it is not triggered by the event
         parameters = generate_matrix_from_config(config.get("parametrize", {}))
         for i, params in enumerate(parameters):

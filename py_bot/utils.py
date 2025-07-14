@@ -119,19 +119,19 @@ def load_configs_from_folder(path_dir: str | Path = ".lightning/workflows") -> l
 def is_triggered_by_event(event: str, branch: str, trigger: Union[dict, list, None] = None) -> bool:
     """Check if the event is triggered by a code change.
 
-    >>> is_triggered_by_event("push", "refs/heads/main", {"push": {"branch": ["main"]}})
+    >>> is_triggered_by_event("push", "main", {"push": {"branch": ["main"]}})
     True
-    >>> is_triggered_by_event("pull_request", "refs/heads/main", {"pull_request": {"branch": ["main"]}})
+    >>> is_triggered_by_event("pull_request", "main", {"pull_request": {"branch": ["main"]}})
     True
-    >>> is_triggered_by_event("push", "refs/heads/feature", {"push": {"branch": ["main"]}})
+    >>> is_triggered_by_event("push", "feature", {"push": {"branch": ["main"]}})
     False
-    >>> is_triggered_by_event("pull_request", "refs/heads/feature", {"pull_request": {"branch": ["main"]}})
+    >>> is_triggered_by_event("pull_request", "feature", {"pull_request": {"branch": ["main"]}})
     False
-    >>> is_triggered_by_event("push", "refs/heads/main")
+    >>> is_triggered_by_event("push", "main")
     True
-    >>> is_triggered_by_event("pull_request", "refs/heads/main")
+    >>> is_triggered_by_event("pull_request", "main")
     True
-    >>> is_triggered_by_event("issue_comment", "refs/heads/main", ["push"])
+    >>> is_triggered_by_event("issue_comment", "main", ["push"])
     False
     """
     if not trigger:
@@ -146,7 +146,7 @@ def is_triggered_by_event(event: str, branch: str, trigger: Union[dict, list, No
     on_branch = trigger[event].get("branch", [])
     if on_branch:
         for ob in on_branch:
-            if branch == f"refs/heads/{ob}":
+            if branch == ob:
                 return True
         return False  # no branch matched
     return True  # if the event is fine but no branch specified
