@@ -122,7 +122,7 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
 
     success = job.status == Status.Completed
     logs = job.logs or "No logs available"
-    job_url = job.link or "No URL available"
+    job_url = job.link + "&job_detail_tab=logs"
     if config.get("mode", "default") != "debug":
         # in non-debug mode, we cut the logs to avoid too much output
         # we expect the logs to contain the cutoff string twice
