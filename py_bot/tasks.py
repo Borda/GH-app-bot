@@ -80,23 +80,21 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
     docker_run_image = params.get("image") or config.get("image", "ubuntu:22.04")
     config_env = config.get("env", {})
     config_env.update(params)  # add params to env
-
-    cmd_run = os.linesep.join(["ls -lah", config_run])
     # print(f"CMD: {cmd_run}")
     docker_run_script = f".lightning-actions-{generate_unique_hash()}.sh"
     cmd_path = os.path.join(repo_dir, docker_run_script)
     assert not os.path.isfile(cmd_path), "the expected actions script already exists"
     # dump the cmd to .lightning/actions.sh
     with open(cmd_path, "w", encoding="utf_8") as fp:
-        fp.write(cmd_run + os.linesep)
+        fp.write(config_run + os.linesep)
     assert os.path.isfile(cmd_path), "missing the created actions script"
     await asyncio.sleep(3)  # todo: wait for the file to be written, likely Job sync issue
-    export_envs = [f"export {k}={shlex.quote(str(v))}" for k, v in config_env.items()]
+    export_envs = "\n".join([f"export {k}={shlex.quote(str(v))}" for k, v in config_env.items()])
     # 1) List the commands you want to run inside the box
     cutoff_str = ("%" * 15) + f" CUT LOG {generate_unique_hash(32)} " + ("%" * 15)
-    commands = export_envs + ["printenv", "cp -r /temp_repo/. /workspace/", "ls -lah", f"cat {docker_run_script}"]
+    debug_cmds = ["printenv", "cp -r /temp_repo/. /workspace/", "ls -lah", f"cat {docker_run_script}"]
     # 2) Prefix each with `box "<cmd>"`
-    boxed_cmds = "\n".join(f'box "{cmd}"' for cmd in commands)
+    boxed_cmds = "\n".join(f'box "{cmd}"' for cmd in debug_cmds)
     # 3) Build the full Docker‐run call using a heredoc
     job_cmd = (
         "docker run --rm -i"
@@ -105,7 +103,7 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
         f" {docker_run_image}"
         # Define your box() helper as a Bash function
         " bash -s << 'EOF'\n"
-        f"{export_envs} \n"
+        f"{export_envs}\n"
         f"{BASH_BOX_FUNC}\n"
         f"{boxed_cmds}\n"
         f'echo "{cutoff_str}"\n'
@@ -125,10 +123,13 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
     success = job.status == Status.Completed
     logs = job.logs or "No logs available"
     if config.get("mode", "default") != "debug":
-        # cut the logs all before the cutoff string
-        cutoff_index = logs.find(cutoff_str)
-        assert cutoff_index != -1, "the cutoff string was not found in the logs"
-        logs = logs[cutoff_index + len(cutoff_str) :].strip()
+        # in non-debug mode, we cut the logs to avoid too much output
+        # we expect the logs to contain the cutoff string twice
+        for _ in range(2):
+            # cut the logs all before the cutoff string
+            cutoff_index = logs.find(cutoff_str)
+            assert cutoff_index != -1, "the cutoff string was not found in the logs"
+            logs = logs[cutoff_index + len(cutoff_str) :]
 
     # todo: cleanup job if needed or success
     return success, f"run finished as {job.status}\n{logs}"
