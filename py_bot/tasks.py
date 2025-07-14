@@ -71,7 +71,7 @@ async def _download_repo_and_extract(owner: str, repo: str, ref: str, token: str
     return tempdir / root_folder
 
 
-async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str):
+async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str) -> tuple[bool, str, str]:
     """Download the full repo at `ref` into a tempdir, look for config and execute the job."""
     # mandatory
     config_run = config["run"]
@@ -88,7 +88,7 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
     with open(cmd_path, "w", encoding="utf_8") as fp:
         fp.write(config_run + os.linesep)
     assert os.path.isfile(cmd_path), "missing the created actions script"
-    await asyncio.sleep(3)  # todo: wait for the file to be written, likely Job sync issue
+    await asyncio.sleep(5)  # todo: wait for the file to be written, likely Job sync issue
     export_envs = "\n".join([f"export {k}={shlex.quote(str(v))}" for k, v in config_env.items()])
     # 1) List the commands you want to run inside the box
     cutoff_str = ("%" * 15) + f" CUT LOG {generate_unique_hash(32)} " + ("%" * 15)
@@ -118,10 +118,11 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
         machine=docker_run_machine,
         interruptible=config.get("interruptible", False),
     )
-    await job.async_wait()  # wait for the job to finish
+    await job.async_wait(timeout=config.get("timeout", 60) * 60)  # wait for the job to finish
 
     success = job.status == Status.Completed
     logs = job.logs or "No logs available"
+    job_url = job.link + "&job_detail_tab=logs"
     if config.get("mode", "default") != "debug":
         # in non-debug mode, we cut the logs to avoid too much output
         # we expect the logs to contain the cutoff string twice
@@ -132,4 +133,4 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
             logs = logs[cutoff_index + len(cutoff_str) :]
 
     # todo: cleanup job if needed or success
-    return success, f"run finished as {job.status}\n{logs}"
+    return success, f"run finished as {job.status}\n{logs}", job_url
