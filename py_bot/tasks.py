@@ -125,10 +125,10 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
     if config.get("mode", "default") != "debug":
         # in non-debug mode, we cut the logs to avoid too much output
         # we expect the logs to contain the cutoff string twice
-        for _ in range(2):
+        for it in range(2):
             # cut the logs all before the cutoff string
             cutoff_index = logs.find(cutoff_str)
-            assert cutoff_index != -1, "the cutoff string was not found in the logs"
+            assert cutoff_index != -1, f"iter {it}: the cutoff string was not found in the logs"
             logs = logs[cutoff_index + len(cutoff_str) :]
 
     # todo: cleanup job if needed or success
