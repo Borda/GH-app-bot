@@ -83,7 +83,8 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
             data={
                 "name": "Lit bot",
                 "head_sha": head_sha,
-                "status": "skipped",
+                "status": "completed",
+                "conclusion": "skipped",
                 "started_at": datetime.datetime.utcnow().isoformat() + "Z",
                 "output": {
                     "title": "No Configs Found",
@@ -104,7 +105,8 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
                 data={
                     "name": f"{cfg_file} / {cfg_name}",
                     "head_sha": head_sha,
-                    "status": "skipped",
+                    "status": "completed",
+                    "conclusion": "skipped",
                     "started_at": datetime.datetime.utcnow().isoformat() + "Z",
                     "output": {
                         "title": "Skipped",
@@ -124,7 +126,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
                 data={
                     "name": task_name,
                     "head_sha": head_sha,
-                    "status": "in_progress",
+                    "status": "in_progress",  # todo: make it also as queued before job starts
                     "started_at": datetime.datetime.utcnow().isoformat() + "Z",
                     "details_url": link_lightning_jobs,
                 },
