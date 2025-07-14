@@ -93,15 +93,8 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
     await asyncio.sleep(3)  # todo: wait for the file to be written, likely Job sync issue
     export_envs = [f"export {k}={shlex.quote(str(v))}" for k, v in config_env.items()]
     # 1) List the commands you want to run inside the box
-    cutoff_str = (">" * 15) + f" CUT LOG {generate_unique_hash(32)} " + ("<" * 15)
-    commands = export_envs + [
-        "printenv",
-        "cp -r /temp_repo/. /workspace/",
-        "ls -lah",
-        f"cat {docker_run_script}",
-        f"echo {cutoff_str}",
-        f"bash {docker_run_script}",
-    ]
+    cutoff_str = ("%" * 15) + f" CUT LOG {generate_unique_hash(32)} " + ("%" * 15)
+    commands = export_envs + ["printenv", "cp -r /temp_repo/. /workspace/", "ls -lah", f"cat {docker_run_script}"]
     # 2) Prefix each with `box "<cmd>"`
     boxed_cmds = "\n".join(f'box "{cmd}"' for cmd in commands)
     # 3) Build the full Docker‐run call using a heredoc
@@ -112,8 +105,11 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
         f" {docker_run_image}"
         # Define your box() helper as a Bash function
         " bash -s << 'EOF'\n"
+        f"{export_envs} \n"
         f"{BASH_BOX_FUNC}\n"
         f"{boxed_cmds}\n"
+        f'echo "{cutoff_str}"\n'
+        f"bash {docker_run_script}\n"
         "EOF"
     )
     logging.debug(f"job >> {job_cmd}")
@@ -132,7 +128,7 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
         # cut the logs all before the cutoff string
         cutoff_index = logs.find(cutoff_str)
         assert cutoff_index != -1, "the cutoff string was not found in the logs"
-        logs = logs[cutoff_index + len(cutoff_str):].strip()
+        logs = logs[cutoff_index + len(cutoff_str) :].strip()
 
     # todo: cleanup job if needed or success
     return success, f"run finished as {job.status}\n{logs}"
