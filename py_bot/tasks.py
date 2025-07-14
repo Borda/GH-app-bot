@@ -27,7 +27,7 @@ BASH_BOX_FUNC = textwrap.dedent("""\
           (( len > max )) && max=$len
         done < <(eval "$cmd" 2>&1)
 
-        local border; border=$(printf '%*s' "$max" '' | tr ' ' '=')
+        local border; border=$(printf '%*s' "$max" '' | tr ' ' '-')
         printf "+%s+\\n" "$border"
         while IFS= read -r l; do
           printf "| %-${max}s |\\n" "$l"
@@ -80,41 +80,38 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
     docker_run_image = params.get("image") or config.get("image", "ubuntu:22.04")
     config_env = config.get("env", {})
     config_env.update(params)  # add params to env
-
-    cmd_run = os.linesep.join(["ls -lah", config_run])
     # print(f"CMD: {cmd_run}")
     docker_run_script = f".lightning-actions-{generate_unique_hash()}.sh"
     cmd_path = os.path.join(repo_dir, docker_run_script)
     assert not os.path.isfile(cmd_path), "the expected actions script already exists"
     # dump the cmd to .lightning/actions.sh
     with open(cmd_path, "w", encoding="utf_8") as fp:
-        fp.write(cmd_run + os.linesep)
+        fp.write(config_run + os.linesep)
     assert os.path.isfile(cmd_path), "missing the created actions script"
     await asyncio.sleep(3)  # todo: wait for the file to be written, likely Job sync issue
-    docker_run_env = " ".join([f"-e {k}={shlex.quote(str(v))}" for k, v in config_env.items()])
-    # 1) Define your box() helper as a Bash function
-    # 2) List the commands you want to run inside the box
-    commands = [
-        "printenv",
-        "cp -r /temp_repo/. /workspace/",
-        "ls -lah",
-        f"cat {docker_run_script}",
-        f"bash {docker_run_script}",
-    ]
-    # 3) Prefix each with `box "<cmd>"`
-    boxed_cmds = "\n".join(f'box "{cmd}"' for cmd in commands)
-    # 4) Build the full Docker‐run call using a heredoc
+    export_envs = "\n".join([f"export {k}={shlex.quote(str(v))}" for k, v in config_env.items()])
+    # 1) List the commands you want to run inside the box
+    cutoff_str = ("%" * 15) + f" CUT LOG {generate_unique_hash(32)} " + ("%" * 15)
+    debug_cmds = ["printenv", "cp -r /temp_repo/. /workspace/", "ls -lah", f"cat {docker_run_script}"]
+    # 2) Prefix each with `box "<cmd>"`
+    boxed_cmds = "\n".join(f'box "{cmd}"' for cmd in debug_cmds)
+    # 3) Build the full Docker‐run call using a heredoc
     job_cmd = (
         "docker run --rm -i"
         f" -v {repo_dir}:/temp_repo"
         " -w /workspace"
-        f" {docker_run_env} {docker_run_image}"
+        f" {docker_run_image}"
+        # Define your box() helper as a Bash function
         " bash -s << 'EOF'\n"
+        f"{export_envs}\n"
         f"{BASH_BOX_FUNC}\n"
         f"{boxed_cmds}\n"
+        f'echo "{cutoff_str}"\n'
+        f"bash {docker_run_script}\n"
         "EOF"
     )
     logging.debug(f"job >> {job_cmd}")
+    # 4) Run the job with the Job.run() method
     job = Job.run(
         name=job_name,
         command=job_cmd,
@@ -124,5 +121,15 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
     await job.async_wait()  # wait for the job to finish
 
     success = job.status == Status.Completed
+    logs = job.logs or "No logs available"
+    if config.get("mode", "default") != "debug":
+        # in non-debug mode, we cut the logs to avoid too much output
+        # we expect the logs to contain the cutoff string twice
+        for it in range(2):
+            # cut the logs all before the cutoff string
+            cutoff_index = logs.find(cutoff_str)
+            assert cutoff_index != -1, f"iter {it}: the cutoff string was not found in the logs"
+            logs = logs[cutoff_index + len(cutoff_str) :]
+
     # todo: cleanup job if needed or success
-    return success, f"run finished as {job.status}\n{job.logs}"
+    return success, f"run finished as {job.status}\n{logs}"
