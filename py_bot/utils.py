@@ -1,6 +1,7 @@
 import glob
 import hashlib
 import itertools
+import logging
 import os
 import time
 from pathlib import Path
@@ -112,3 +113,37 @@ def load_configs_from_folder(path_dir: str | Path = ".lightning/workflows") -> l
             raise ValueError(f"Empty config file: {cfg_path}")
         configs.append((Path(cfg_path).name, config))
     return configs
+
+
+def is_triggered_by_event(event: str, branch: str, trigger: dict | list | None = None) -> bool:
+    """Check if the event is triggered by a code change.
+
+    >>> is_triggered_by_event("push", "main", {"push": {"branches": ["main"]}})
+    True
+    >>> is_triggered_by_event("pull_request", "main", {"pull_request": {"branches": ["main"]}})
+    True
+    >>> is_triggered_by_event("push", "feature", {"push": {"branches": ["main"]}})
+    False
+    >>> is_triggered_by_event("pull_request", "feature", {"pull_request": {"branches": ["main"]}})
+    False
+    >>> is_triggered_by_event("push", "main")
+    True
+    >>> is_triggered_by_event("pull_request", "main")
+    True
+    >>> is_triggered_by_event("issue_comment", "main", ["push"])
+    False
+    """
+    if not trigger:
+        return True  # No specific trigger, assume all events are valid
+    # if isinstance(trigger, str):
+    #     return trigger == event
+    if isinstance(trigger, list):
+        return event in trigger
+    if event not in trigger:
+        logging.warning(f"Event {event} is not in the trigger list: {trigger}")
+        return False
+    branches = trigger[event].get("branches", [])
+    if branches:
+        # Check if the branch is in the list of branches
+        return any(ob == branch for ob in branches)  # todo: update it to reqex
+    return True  # if the event is fine but no branch specified

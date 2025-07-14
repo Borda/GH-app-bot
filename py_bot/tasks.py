@@ -16,26 +16,26 @@ from py_bot.utils import generate_unique_hash
 LOCAL_ROOT_DIR = Path(__file__).parent
 LOCAL_TEMP_DIR = LOCAL_ROOT_DIR / ".temp"
 BASH_BOX_FUNC = textwrap.dedent("""\
-      box() {
-        local cmd="$1"
-        local tmp;  tmp=$(mktemp)
-        local max=0
-        local line
-        while IFS= read -r line; do
-          echo "$line" >> "$tmp"
-          local len=${#line}
-          (( len > max )) && max=$len
-        done < <(eval "$cmd" 2>&1)
+  box() {
+    local cmd="$1"
+    local tmp;  tmp=$(mktemp)
+    local max=0
+    local line
+    while IFS= read -r line; do
+      echo "$line" >> "$tmp"
+      local len=${#line}
+      (( len > max )) && max=$len
+    done < <(eval "$cmd" 2>&1)
 
-        local border; border=$(printf '%*s' "$max" '' | tr ' ' '-')
-        printf "+%s+\\n" "$border"
-        while IFS= read -r l; do
-          printf "| %-${max}s |\\n" "$l"
-        done < "$tmp"
-        printf "+%s+\\n" "$border"
-        rm "$tmp"
-      }
-    """)
+    local border; border=$(printf '%*s' "$max" '' | tr ' ' '-')
+    printf "+%s+\\n" "$border"
+    while IFS= read -r l; do
+      printf "| %-${max}s |\\n" "$l"
+    done < "$tmp"
+    printf "+%s+\\n" "$border"
+    rm "$tmp"
+  }
+""")
 
 
 async def run_sleeping_task(*args: Any, **kwargs: Any):
@@ -96,11 +96,12 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
     # 2) Prefix each with `box "<cmd>"`
     boxed_cmds = "\n".join(f'box "{cmd}"' for cmd in debug_cmds)
     # 3) Build the full Docker‐run call using a heredoc
+    with_gpus = "" if docker_run_machine.is_cpu() else "--gpus=all"
     job_cmd = (
         "docker run --rm -i"
         f" -v {repo_dir}:/temp_repo"
         " -w /workspace"
-        f" {docker_run_image}"
+        f" {with_gpus} {docker_run_image}"
         # Define your box() helper as a Bash function
         " bash -s << 'EOF'\n"
         f"{export_envs}\n"
@@ -129,8 +130,9 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
         for it in range(2):
             # cut the logs all before the cutoff string
             cutoff_index = logs.find(cutoff_str)
-            assert cutoff_index != -1, f"iter {it}: the cutoff string was not found in the logs"
+            if cutoff_index == -1:
+                logging.warn(f"iter {it}: the cutoff string was not found in the logs")
             logs = logs[cutoff_index + len(cutoff_str) :]
 
     # todo: cleanup job if needed or success
-    return success, f"run finished as {job.status}\n{logs}", job_url
+    return success, logs, job_url

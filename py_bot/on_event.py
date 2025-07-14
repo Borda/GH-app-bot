@@ -11,7 +11,7 @@ from lightning_sdk import Teamspace
 from lightning_sdk.lightning_cloud.env import LIGHTNING_CLOUD_URL
 
 from py_bot.tasks import _download_repo_and_extract, run_repo_job
-from py_bot.utils import generate_matrix_from_config, load_configs_from_folder
+from py_bot.utils import generate_matrix_from_config, is_triggered_by_event, load_configs_from_folder
 
 MAX_SUMMARY_LENGTH = 64000
 
@@ -54,12 +54,18 @@ MAX_SUMMARY_LENGTH = 64000
 
 
 async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> None:
-    # figure out the commit SHA
-    head_sha = event.data["after"] if event.event == "push" else event.data["pull_request"]["head"]["sha"]
+    # figure out the commit SHA and branch ref
+    if event.event == "push":
+        head_sha = event.data["after"]
+        branch_ref = event.data["ref"][len("refs/heads/") :]
+    else:  # pull_request
+        head_sha = event.data["pull_request"]["head"]["sha"]
+        branch_ref = event.data["pull_request"]["base"]["ref"]
     owner = event.data["repository"]["owner"]["login"]
     repo = event.data["repository"]["name"]
     this_teamspace = Teamspace()
     link_lightning_jobs = f"{LIGHTNING_CLOUD_URL}/{this_teamspace.owner.name}/{this_teamspace.name}/jobs/"
+    post_check = f"/repos/{owner}/{repo}/check-runs"
 
     # 1) Download the repository at the specified ref
     repo_dir = await _download_repo_and_extract(owner, repo, head_sha, token)
@@ -72,12 +78,17 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
     if not configs:
         logging.warn(f"No valid configs found in {repo_dir / '.lightning' / 'workflows'}")
         await gh.post(
-            f"/repos/{owner}/{repo}/check-runs",
+            post_check,
             data={
                 "name": "Lit bot",
                 "head_sha": head_sha,
-                "status": "cancelled",
+                "status": "completed",
+                "conclusion": "skipped",
                 "started_at": datetime.datetime.utcnow().isoformat() + "Z",
+                "output": {
+                    "title": "No Configs Found",
+                    "summary": "No valid configuration files found in `.lightning/workflows`.",
+                },
             },
         )
         shutil.rmtree(repo_dir, ignore_errors=True)
@@ -85,20 +96,37 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
 
     # 2) Launch check runs for each job
     tasks = []
-    for cfg_file, config in configs:
+    for cfg_file_name, config in configs:
+        cfg_name = config.get("name", "Lit Job")
+        if not is_triggered_by_event(event=event.event, branch=branch_ref, trigger=config.get("trigger")):
+            await gh.post(
+                post_check,
+                data={
+                    "name": f"{cfg_file_name} / {cfg_name} [{event.event}]",
+                    "head_sha": head_sha,
+                    "status": "completed",
+                    "conclusion": "skipped",
+                    "started_at": datetime.datetime.utcnow().isoformat() + "Z",
+                    "output": {
+                        "title": "Skipped",
+                        "summary": f"Configuration `{cfg_file_name}` is not triggered"
+                        f" by the event `{event.event}` on branch `{branch_ref}`.",
+                    },
+                },
+            )
+            continue  # skip this config if it is not triggered by the event
         parameters = generate_matrix_from_config(config.get("parametrize", {}))
-        for i, params in enumerate(parameters):
-            name = params.get("name") or config.get("name", "Lit Job")
-            task_name = f"{cfg_file} / {name} ({', '.join(params.values())})"
+        for _, params in enumerate(parameters):
+            name = params.get("name") or cfg_name
+            task_name = f"{cfg_file_name} / {name} ({', '.join(params.values())})"
             logging.debug(f"=> pull_request: synchronize -> {task_name=}")
-
-            # Create check run
+            # Create a check run
             check = await gh.post(
-                f"/repos/{owner}/{repo}/check-runs",
+                post_check,
                 data={
                     "name": task_name,
                     "head_sha": head_sha,
-                    "status": "in_progress",
+                    "status": "in_progress",  # todo: make it also as queued before job starts
                     "started_at": datetime.datetime.utcnow().isoformat() + "Z",
                     "details_url": link_lightning_jobs,
                 },
@@ -129,11 +157,16 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
 
 
 async def run_and_complete(
-    token, owner: str, repo: str, ref: str, config: dict, params: dict, repo_dir: str, task_name: str, check_id
+    token, owner: str, repo: str, ref: str, config: dict, params: dict, repo_dir: str | Path, task_name: str, check_id
 ) -> None:
     # run the job with docker in the repo directory
     job_name = f"ci-run_{owner}-{repo}-{ref}-{task_name.replace(' ', '_')}"
-    success, summary, job_url = await run_repo_job(config=config, params=params, repo_dir=repo_dir, job_name=job_name)
+    try:
+        success, summary, job_url = await run_repo_job(
+            config=config, params=params, repo_dir=repo_dir, job_name=job_name
+        )
+    except Exception as ex:
+        success, summary, job_url = False, f"Job failed with error: {ex!s}", None
     logging.debug(f"job '{job_name}' finished with {success}")
 
     # open its own session & GitHubAPI to patch the check-run
