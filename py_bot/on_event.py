@@ -3,6 +3,7 @@ import datetime
 import logging
 import shutil
 from pathlib import Path
+from pprint import pprint
 from typing import Any
 
 import aiohttp
@@ -11,7 +12,7 @@ from lightning_sdk import Teamspace
 from lightning_sdk.lightning_cloud.env import LIGHTNING_CLOUD_URL
 
 from py_bot.tasks import _download_repo_and_extract, run_repo_job
-from py_bot.utils import generate_matrix_from_config, load_configs_from_folder
+from py_bot.utils import generate_matrix_from_config, load_configs_from_folder, is_triggered_by_event
 
 MAX_SUMMARY_LENGTH = 64000
 
@@ -86,6 +87,9 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
     # 2) Launch check runs for each job
     tasks = []
     for cfg_file, config in configs:
+        pprint(event.data)
+        if not is_triggered_by_event(event=event.event, branch=event.data["ref"], trigger=config.get("trigger")):
+            continue  # skip this config if it is not triggered by the event
         parameters = generate_matrix_from_config(config.get("parametrize", {}))
         for i, params in enumerate(parameters):
             name = params.get("name") or config.get("name", "Lit Job")

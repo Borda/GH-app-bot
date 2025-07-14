@@ -22,6 +22,17 @@ The bot reads YAML workflow configuration files from the `.lightning/workflows/`
 ```yaml
 # .lightning/workflows/pr-checks.yml
 image: "python:3.11-slim-bookworm"
+machine: "CPU"  # can be overridden by the matrix
+
+env:
+  HELLO: "world"
+  TEST_ENV: "ci"
+
+trigger: # Define when the workflow should run, by default it runs on PRs and all pushes
+  push:
+    branches: ["main"]  # Trigger on pushes to these branches
+  pull_request:  # Trigger on pull requests
+    branches: ["main"]  # Only for PRs targeting the main branch
 
 parametrize:
   matrix:
@@ -30,10 +41,6 @@ parametrize:
   include: []
   exclude:
     - {"image": "python:3.10-slim-bookworm", "machine": "L4"}
-
-env:
-  HELLO: "world"
-  TEST_ENV: "ci"
 
 timeout: 60  # Timeout in minutes
 
