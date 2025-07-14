@@ -128,7 +128,7 @@ async def run_and_complete(
 ) -> None:
     # run the job with docker in the repo directory
     job_name = f"ci-run_{owner}-{repo}-{ref}-{task_name.replace(' ', '_')}"
-    success, summary = await run_repo_job(config=config, params=params, repo_dir=repo_dir, job_name=job_name)
+    success, summary, job_url = await run_repo_job(config=config, params=params, repo_dir=repo_dir, job_name=job_name)
     logging.debug(f"job '{job_name}' finished with {success}")
 
     # open its own session & GitHubAPI to patch the check-run
@@ -144,5 +144,6 @@ async def run_and_complete(
                     "title": f"{task_name} result",
                     "summary": summary[:MAX_SUMMARY_LENGTH],
                 },
+                "details_url": job_url,
             },
         )
