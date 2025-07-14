@@ -118,7 +118,7 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
         machine=docker_run_machine,
         interruptible=config.get("interruptible", False),
     )
-    await job.async_wait()  # wait for the job to finish
+    await job.async_wait(timeout=config.get("timeout", 60) * 60)  # wait for the job to finish
 
     success = job.status == Status.Completed
     logs = job.logs or "No logs available"

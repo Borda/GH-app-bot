@@ -35,6 +35,10 @@ env:
   HELLO: "world"
   TEST_ENV: "ci"
 
+timeout: 60  # Timeout in minutes
+
+mode: "debug"  # would share full logs
+
 run: |
   echo "Starting PR validation"
   pwd
