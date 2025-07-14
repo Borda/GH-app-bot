@@ -22,8 +22,6 @@ def _load_validate_required_env_vars() -> tuple[str, str, str]:
         private_key_path = Path(private_key_path).expanduser().resolve()
         assert private_key_path.is_file(), f"Private key file not found at {private_key_path}"
         private_key = private_key_path.read_text()
-    assert private_key.startswith("-----BEGIN RSA PRIVATE KEY-----"), "Private key must be in PEM format"
-    assert private_key.endswith("-----END RSA PRIVATE KEY-----"), "Private key must be in PEM format"
     webhook_secret = os.getenv("WEBHOOK_SECRET", "")
     return github_app_id, private_key, webhook_secret
 
