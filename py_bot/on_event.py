@@ -66,6 +66,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
     repo = event.data["repository"]["name"]
     this_teamspace = Teamspace()
     link_lightning_jobs = f"{LIGHTNING_CLOUD_URL}/{this_teamspace.owner.name}/{this_teamspace.name}/jobs/"
+    post_check = f"/repos/{owner}/{repo}/check-runs"
 
     # 1) Download the repository at the specified ref
     repo_dir = await _download_repo_and_extract(owner, repo, head_sha, token)
@@ -78,12 +79,16 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
     if not configs:
         logging.warn(f"No valid configs found in {repo_dir / '.lightning' / 'workflows'}")
         await gh.post(
-            f"/repos/{owner}/{repo}/check-runs",
+            post_check,
             data={
                 "name": "Lit bot",
                 "head_sha": head_sha,
-                "status": "cancelled",
+                "status": "skipped",
                 "started_at": datetime.datetime.utcnow().isoformat() + "Z",
+                "output": {
+                    "title": "No Configs Found",
+                    "summary": f"No valid configuration files found in `.lightning/workflows`.",
+                },
             },
         )
         shutil.rmtree(repo_dir, ignore_errors=True)
@@ -92,11 +97,12 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
     # 2) Launch check runs for each job
     tasks = []
     for cfg_file, config in configs:
+        cfg_name = config.get("name", "Lit Job")
         if not is_triggered_by_event(event=event.event, branch=branch_ref, trigger=config.get("trigger")):
             await gh.post(
-                f"/repos/{owner}/{repo}/check-runs",
+                post_check,
                 data={
-                    "name": f"{cfg_file} / {name}",
+                    "name": f"{cfg_file} / {cfg_name}",
                     "head_sha": head_sha,
                     "status": "skipped",
                     "started_at": datetime.datetime.utcnow().isoformat() + "Z",
@@ -109,13 +115,12 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
             continue  # skip this config if it is not triggered by the event
         parameters = generate_matrix_from_config(config.get("parametrize", {}))
         for i, params in enumerate(parameters):
-            name = params.get("name") or config.get("name", "Lit Job")
+            name = params.get("name") or cfg_name
             task_name = f"{cfg_file} / {name} ({', '.join(params.values())})"
             logging.debug(f"=> pull_request: synchronize -> {task_name=}")
-
             # Create check run
             check = await gh.post(
-                f"/repos/{owner}/{repo}/check-runs",
+                post_check,
                 data={
                     "name": task_name,
                     "head_sha": head_sha,
