@@ -4,7 +4,7 @@ import logging
 import shutil
 from pathlib import Path
 from pprint import pprint
-from typing import Any
+from typing import Any, Union
 
 import aiohttp
 from gidgethub.aiohttp import GitHubAPI
@@ -157,7 +157,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
 
 
 async def run_and_complete(
-    token, owner: str, repo: str, ref: str, config: dict, params: dict, repo_dir: str, task_name: str, check_id
+    token, owner: str, repo: str, ref: str, config: dict, params: dict, repo_dir: Union[str, Path], task_name: str, check_id
 ) -> None:
     # run the job with docker in the repo directory
     job_name = f"ci-run_{owner}-{repo}-{ref}-{task_name.replace(' ', '_')}"
