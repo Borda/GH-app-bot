@@ -166,7 +166,7 @@ async def run_and_complete(
             config=config, params=params, repo_dir=repo_dir, job_name=job_name
         )
     except Exception as ex:
-        success, summary, job_url = False, f"Job failed with error: {ex!s}", None
+        success, summary, job_url = False, f"Job failed with error: \n{ex!s}", None
     logging.debug(f"job '{job_name}' finished with {success}")
 
     # open its own session & GitHubAPI to patch the check-run
@@ -180,7 +180,8 @@ async def run_and_complete(
                 "conclusion": "success" if success else "failure",
                 "output": {
                     "title": f"{task_name} result",
-                    "summary": summary[:MAX_SUMMARY_LENGTH],
+                    # todo: consider improve parsing and formatting with MD
+                    "summary": f"```\n{summary[:MAX_SUMMARY_LENGTH]}\n```",
                 },
                 "details_url": job_url,
             },
