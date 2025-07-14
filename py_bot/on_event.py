@@ -3,8 +3,7 @@ import datetime
 import logging
 import shutil
 from pathlib import Path
-from pprint import pprint
-from typing import Any, Union
+from typing import Any
 
 import aiohttp
 from gidgethub.aiohttp import GitHubAPI
@@ -12,7 +11,7 @@ from lightning_sdk import Teamspace
 from lightning_sdk.lightning_cloud.env import LIGHTNING_CLOUD_URL
 
 from py_bot.tasks import _download_repo_and_extract, run_repo_job
-from py_bot.utils import generate_matrix_from_config, load_configs_from_folder, is_triggered_by_event
+from py_bot.utils import generate_matrix_from_config, is_triggered_by_event, load_configs_from_folder
 
 MAX_SUMMARY_LENGTH = 64000
 
@@ -58,7 +57,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
     # figure out the commit SHA and branch ref
     if event.event == "push":
         head_sha = event.data["after"]
-        branch_ref = event.data["ref"][len("refs/heads/"):]
+        branch_ref = event.data["ref"][len("refs/heads/") :]
     else:  # pull_request
         head_sha = event.data["pull_request"]["head"]["sha"]
         branch_ref = event.data["pull_request"]["base"]["ref"]
@@ -88,7 +87,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
                 "started_at": datetime.datetime.utcnow().isoformat() + "Z",
                 "output": {
                     "title": "No Configs Found",
-                    "summary": f"No valid configuration files found in `.lightning/workflows`.",
+                    "summary": "No valid configuration files found in `.lightning/workflows`.",
                 },
             },
         )
@@ -97,30 +96,31 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
 
     # 2) Launch check runs for each job
     tasks = []
-    for cfg_file, config in configs:
+    for cfg_file_name, config in configs:
         cfg_name = config.get("name", "Lit Job")
         if not is_triggered_by_event(event=event.event, branch=branch_ref, trigger=config.get("trigger")):
             await gh.post(
                 post_check,
                 data={
-                    "name": f"{cfg_file} / {cfg_name} [{event.event}]",
+                    "name": f"{cfg_file_name} / {cfg_name} [{event.event}]",
                     "head_sha": head_sha,
                     "status": "completed",
                     "conclusion": "skipped",
                     "started_at": datetime.datetime.utcnow().isoformat() + "Z",
                     "output": {
                         "title": "Skipped",
-                        "summary": f"Configuration `{cfg_file}` is not triggered by the event `{event.event}` on branch `{branch_ref}`.",
+                        "summary": f"Configuration `{cfg_file_name}` is not triggered"
+                        f" by the event `{event.event}` on branch `{branch_ref}`.",
                     },
                 },
             )
             continue  # skip this config if it is not triggered by the event
         parameters = generate_matrix_from_config(config.get("parametrize", {}))
-        for i, params in enumerate(parameters):
+        for _, params in enumerate(parameters):
             name = params.get("name") or cfg_name
-            task_name = f"{cfg_file} / {name} ({', '.join(params.values())})"
+            task_name = f"{cfg_file_name} / {name} ({', '.join(params.values())})"
             logging.debug(f"=> pull_request: synchronize -> {task_name=}")
-            # Create check run
+            # Create a check run
             check = await gh.post(
                 post_check,
                 data={
@@ -157,12 +157,14 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
 
 
 async def run_and_complete(
-    token, owner: str, repo: str, ref: str, config: dict, params: dict, repo_dir: Union[str, Path], task_name: str, check_id
+    token, owner: str, repo: str, ref: str, config: dict, params: dict, repo_dir: str | Path, task_name: str, check_id
 ) -> None:
     # run the job with docker in the repo directory
     job_name = f"ci-run_{owner}-{repo}-{ref}-{task_name.replace(' ', '_')}"
     try:
-        success, summary, job_url = await run_repo_job(config=config, params=params, repo_dir=repo_dir, job_name=job_name)
+        success, summary, job_url = await run_repo_job(
+            config=config, params=params, repo_dir=repo_dir, job_name=job_name
+        )
     except Exception as ex:
         success, summary, job_url = False, f"Job failed with error: {ex!s}", None
     logging.debug(f"job '{job_name}' finished with {success}")

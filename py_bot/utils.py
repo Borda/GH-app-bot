@@ -5,7 +5,6 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Union
 
 import yaml
 
@@ -116,7 +115,7 @@ def load_configs_from_folder(path_dir: str | Path = ".lightning/workflows") -> l
     return configs
 
 
-def is_triggered_by_event(event: str, branch: str, trigger: Union[dict, list, None] = None) -> bool:
+def is_triggered_by_event(event: str, branch: str, trigger: dict | list | None = None) -> bool:
     """Check if the event is triggered by a code change.
 
     >>> is_triggered_by_event("push", "main", {"push": {"branches": ["main"]}})
@@ -140,7 +139,7 @@ def is_triggered_by_event(event: str, branch: str, trigger: Union[dict, list, No
     #     return trigger == event
     if isinstance(trigger, list):
         return event in trigger
-    if not event in trigger:
+    if event not in trigger:
         logging.warning(f"Event {event} is not in the trigger list: {trigger}")
         return False
     branches = trigger[event].get("branches", [])
