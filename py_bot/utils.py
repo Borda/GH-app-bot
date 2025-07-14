@@ -119,13 +119,13 @@ def load_configs_from_folder(path_dir: str | Path = ".lightning/workflows") -> l
 def is_triggered_by_event(event: str, branch: str, trigger: Union[dict, list, None] = None) -> bool:
     """Check if the event is triggered by a code change.
 
-    >>> is_triggered_by_event("push", "main", {"push": {"branch": ["main"]}})
+    >>> is_triggered_by_event("push", "main", {"push": {"branches": ["main"]}})
     True
-    >>> is_triggered_by_event("pull_request", "main", {"pull_request": {"branch": ["main"]}})
+    >>> is_triggered_by_event("pull_request", "main", {"pull_request": {"branches": ["main"]}})
     True
-    >>> is_triggered_by_event("push", "feature", {"push": {"branch": ["main"]}})
+    >>> is_triggered_by_event("push", "feature", {"push": {"branches": ["main"]}})
     False
-    >>> is_triggered_by_event("pull_request", "feature", {"pull_request": {"branch": ["main"]}})
+    >>> is_triggered_by_event("pull_request", "feature", {"pull_request": {"branches": ["main"]}})
     False
     >>> is_triggered_by_event("push", "main")
     True
@@ -143,10 +143,8 @@ def is_triggered_by_event(event: str, branch: str, trigger: Union[dict, list, No
     if not event in trigger:
         logging.warning(f"Event {event} is not in the trigger list: {trigger}")
         return False
-    on_branch = trigger[event].get("branch", [])
-    if on_branch:
-        for ob in on_branch:
-            if branch == ob:
-                return True
-        return False  # no branch matched
+    branches = trigger[event].get("branches", [])
+    if branches:
+        # Check if the branch is in the list of branches
+        return any(ob == branch for ob in branches)
     return True  # if the event is fine but no branch specified
