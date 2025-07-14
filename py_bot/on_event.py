@@ -103,7 +103,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
             await gh.post(
                 post_check,
                 data={
-                    "name": f"{cfg_file} / {cfg_name}",
+                    "name": f"{cfg_file} / {cfg_name} [{event.event}]",
                     "head_sha": head_sha,
                     "status": "completed",
                     "conclusion": "skipped",
@@ -161,7 +161,10 @@ async def run_and_complete(
 ) -> None:
     # run the job with docker in the repo directory
     job_name = f"ci-run_{owner}-{repo}-{ref}-{task_name.replace(' ', '_')}"
-    success, summary, job_url = await run_repo_job(config=config, params=params, repo_dir=repo_dir, job_name=job_name)
+    try:
+        success, summary, job_url = await run_repo_job(config=config, params=params, repo_dir=repo_dir, job_name=job_name)
+    except Exception as ex:
+        success, summary, job_url = False, f"Job failed with error: {ex!s}", None
     logging.debug(f"job '{job_name}' finished with {success}")
 
     # open its own session & GitHubAPI to patch the check-run

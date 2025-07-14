@@ -135,4 +135,4 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
             logs = logs[cutoff_index + len(cutoff_str) :]
 
     # todo: cleanup job if needed or success
-    return success, f"run finished as {job.status}\n{logs}", job_url
+    return success, logs, job_url
