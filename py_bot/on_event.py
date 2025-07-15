@@ -99,22 +99,25 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
     for cfg_file_name, config in configs:
         cfg_name = config.get("name", "Lit Job")
         if not is_triggered_by_event(event=event.event, branch=branch_ref, trigger=config.get("trigger")):
-            await gh.post(
-                post_check,
-                data={
-                    "name": f"{cfg_file_name} / {cfg_name} [{event.event}]",
-                    "head_sha": head_sha,
-                    "status": "completed",
-                    "conclusion": "skipped",
-                    "started_at": datetime.datetime.utcnow().isoformat() + "Z",
-                    "output": {
-                        "title": "Skipped",
-                        "summary": f"Configuration `{cfg_file_name}` is not triggered"
-                        f" by the event `{event.event}` on branch `{branch_ref}`.",
+            if event.event in config.get("trigger", []):
+                # there is a trigger for this event, but it is not matched
+                await gh.post(
+                    post_check,
+                    data={
+                        "name": f"{cfg_file_name} / {cfg_name} [{event.event}]",
+                        "head_sha": head_sha,
+                        "status": "completed",
+                        "conclusion": "skipped",
+                        "started_at": datetime.datetime.utcnow().isoformat() + "Z",
+                        "output": {
+                            "title": "Skipped",
+                            "summary": f"Configuration `{cfg_file_name}` is not triggered"
+                            f" by the event `{event.event}` on branch `{branch_ref}`.",
+                        },
                     },
-                },
-            )
-            continue  # skip this config if it is not triggered by the event
+                )
+            # skip this config if it is not triggered by the event
+            continue
         parameters = generate_matrix_from_config(config.get("parametrize", {}))
         for _, params in enumerate(parameters):
             name = params.get("name") or cfg_name
@@ -141,6 +144,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
                         owner=owner,
                         repo=repo,
                         ref=head_sha,
+                        cfg_file_name=cfg_file_name,
                         config=config,
                         params=params,
                         repo_dir=repo_dir,
@@ -157,13 +161,22 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
 
 
 async def run_and_complete(
-    token, owner: str, repo: str, ref: str, config: dict, params: dict, repo_dir: str | Path, task_name: str, check_id
+    token: str,
+    owner: str,
+    repo: str,
+    ref: str,
+    cfg_file_name: str,
+    config: dict,
+    params: dict,
+    repo_dir: str | Path,
+    task_name: str,
+    check_id,
 ) -> None:
     # run the job with docker in the repo directory
     job_name = f"ci-run_{owner}-{repo}-{ref}-{task_name.replace(' ', '_')}"
     try:
         success, summary, job_url = await run_repo_job(
-            config=config, params=params, repo_dir=repo_dir, job_name=job_name
+            cfg_file_name=cfg_file_name, config=config, params=params, repo_dir=repo_dir, job_name=job_name
         )
     except Exception as ex:
         success, summary, job_url = False, f"Job failed with error: \n{ex!s}", None

@@ -80,10 +80,15 @@ def generate_matrix_from_config(config_parametrize: dict) -> list:
     return filtered_combinations
 
 
-def generate_unique_hash(length=16):
-    """Generate a unique hash string of specified length."""
-    # Use current timestamp and a counter for uniqueness
-    unique_string = f"{time.time()}{os.getpid()}"
+def generate_unique_hash(length=16, params: dict | None = None) -> str:
+    """Generate a unique hash string of a specified length.
+
+    >>> hash_16 = generate_unique_hash(params={"test": "value"})
+    >>> len(hash_16)
+    16
+    """
+    # Use the current timestamp and a counter for uniqueness
+    unique_string = f"{time.time()}{os.getpid()}{params.values() if params else ''}"
     hash_object = hashlib.md5(unique_string.encode())
     return hash_object.hexdigest()[:length]
 
