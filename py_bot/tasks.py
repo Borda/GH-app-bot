@@ -71,7 +71,9 @@ async def _download_repo_and_extract(owner: str, repo: str, ref: str, token: str
     return tempdir / root_folder
 
 
-async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str) -> tuple[bool, str, str]:
+async def run_repo_job(
+    cfg_file_name: str, config: dict, params: dict, repo_dir: str, job_name: str
+) -> tuple[bool, str, str]:
     """Download the full repo at `ref` into a tempdir, look for config and execute the job."""
     # mandatory
     config_run = config["run"]
@@ -81,7 +83,7 @@ async def run_repo_job(config: dict, params: dict, repo_dir: str, job_name: str)
     config_env = config.get("env", {})
     config_env.update(params)  # add params to env
     # print(f"CMD: {cmd_run}")
-    docker_run_script = f".lightning-actions-{generate_unique_hash()}.sh"
+    docker_run_script = f".lightning_workflow_{cfg_file_name.split('.')[0]}-{generate_unique_hash(params=params)}.sh"
     cmd_path = os.path.join(repo_dir, docker_run_script)
     assert not os.path.isfile(cmd_path), "the expected actions script already exists"
     # dump the cmd to .lightning/actions.sh
