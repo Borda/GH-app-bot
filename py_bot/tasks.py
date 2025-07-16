@@ -71,9 +71,7 @@ async def _download_repo_and_extract(owner: str, repo: str, ref: str, token: str
     return tempdir / root_folder
 
 
-async def run_repo_job(
-    cfg_file_name: str, config: dict, params: dict, repo_dir: str, job_name: str
-) -> tuple[bool, str, str]:
+async def run_repo_job(cfg_file_name: str, config: dict, params: dict, repo_dir: str, job_name: str) -> tuple[Job, str]:
     """Download the full repo at `ref` into a tempdir, look for config and execute the job."""
     # mandatory
     config_run = config["run"]
@@ -121,20 +119,23 @@ async def run_repo_job(
         machine=docker_run_machine,
         interruptible=config.get("interruptible", False),
     )
-    await job.async_wait(timeout=config.get("timeout", 60) * 60)  # wait for the job to finish
+    return job, cutoff_str
 
+
+def finalize_job(job: Job, cutoff_str: str, debug: bool = False) -> tuple[bool, str]:
+    """Finalize the job by updating its status and logs."""
     success = job.status == Status.Completed
     logs = job.logs or "No logs available"
-    job_url = job.link + "&job_detail_tab=logs"
-    if config.get("mode", "default") != "debug":
-        # in non-debug mode, we cut the logs to avoid too much output
-        # we expect the logs to contain the cutoff string twice
-        for it in range(2):
-            # cut the logs all before the cutoff string
-            cutoff_index = logs.find(cutoff_str)
-            if cutoff_index == -1:
-                logging.warn(f"iter {it}: the cutoff string was not found in the logs")
-            logs = logs[cutoff_index + len(cutoff_str) :]
+    if debug or not cutoff_str:
+        return success, logs
+    # in non-debug mode, we cut the logs to avoid too much output
+    # we expect the logs to contain the cutoff string twice
+    for it in range(2):
+        # cut the logs all before the cutoff string
+        cutoff_index = logs.find(cutoff_str)
+        if cutoff_index == -1:
+            logging.warn(f"iter {it}: the cutoff string was not found in the logs")
+        logs = logs[cutoff_index + len(cutoff_str) :]
 
     # todo: cleanup job if needed or success
-    return success, logs, job_url
+    return success, logs
