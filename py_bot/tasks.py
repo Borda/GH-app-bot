@@ -51,7 +51,7 @@ async def run_sleeping_task(*args: Any, **kwargs: Any):
     return True
 
 
-async def _download_repo_and_extract(owner: str, repo: str, ref: str, token: str, suffix: str = "") -> Path:
+async def download_repo_and_extract(owner: str, repo: str, ref: str, token: str, suffix: str = "") -> Path:
     """Download a GitHub repository at a specific ref (branch, tag, commit) and extract it to a temp directory."""
     # 1) Fetch zipball archive
     url = f"https://api.github.com/repos/{owner}/{repo}/zipball/{ref}"
@@ -79,7 +79,7 @@ async def _download_repo_and_extract(owner: str, repo: str, ref: str, token: str
     if suffix:
         new_path_repo = tempdir / f"{root_folder}-{suffix}"
         if new_path_repo.exists():
-            raise FileExistsError(f"Path {new_path_repo} already exists, cannot rename {path_repo}")
+            raise IsADirectoryError(f"Path {new_path_repo} already exists, cannot rename {path_repo}")
         path_repo.rename(new_path_repo)
         path_repo = new_path_repo
 
