@@ -182,16 +182,28 @@ async def run_and_complete(
 ) -> None:
     job_name = f"ci-run_{owner}-{repo}-{ref}-{task_name.replace(' ', '_')}"
     debug_mode = config.get("mode", "info") == "debug"
+    # open its own session & GitHubAPI to patch the check-run
+    gh_api = GitHubAPI(session, "pr-check-bot", oauth_token=token)
+    post_check = f"/repos/{owner}/{repo}/check-runs"
+    # define initial values
+    success, summary, job, job_url, cutoff_str = None, "", None, None, ""
     try:
         job, cutoff_str = await run_repo_job(
             cfg_file_name=cfg_file_name, config=config, params=params, repo_dir=repo_dir, job_name=job_name
         )
+    except Exception as ex:
+        success, summary = False, f"Job `{job_name}` failed"
+        if debug_mode:
+            summary += f" with exception: {ex!s}"
+    if success is None:
         job_url = job.link + "&job_detail_tab=logs"
-        gh2 = GitHubAPI(session, "pr-check-bot", oauth_token=token)
-        await gh2.patch(
-            f"/repos/{owner}/{repo}/check-runs/{check_id}",
+        await gh_api.patch(post_check,
             data={
                 "status": "queued",
+                "output": {
+                    "title": "Job is pending",
+                    "summary": "Wait for machine availability",
+                },
                 "details_url": job_url,
             },
         )
@@ -200,30 +212,31 @@ async def run_and_complete(
             if job.status in (Status.Running, Status.Stopping, Status.Completed, Status.Stopped, Status.Failed):
                 break
             if asyncio.get_event_loop().time() - queue_start > JOB_QUEUE_TIMEOUT:
-                raise TimeoutError(f"Job didn't started within the provided ({JOB_QUEUE_TIMEOUT}) timeout.")
+                success, summary = False, f"Job `{job_name}` didn't start within the provided ({JOB_QUEUE_TIMEOUT}) timeout."
+                break
             await asyncio.sleep(JOB_QUEUE_INTERVAL)
-        gh2 = GitHubAPI(session, "pr-check-bot", oauth_token=token)
-        await gh2.patch(
-            f"/repos/{owner}/{repo}/check-runs/{check_id}",
+    if success is None:
+        await gh_api.patch(post_check,
             data={
                 "status": "in_progress",
                 "started_at": datetime.datetime.utcnow().isoformat() + "Z",
+                "output": {
+                    "title": "Job is running",
+                    "summary": "Job is running on Lightning Cloud, please wait until it finishes.",
+                },
                 "details_url": job_url,
             },
         )
-        await job.async_wait(timeout=config.get("timeout", 60) * 60)  # wait for the job to finish
-        success, summary, job_url = finalize_job(job, cutoff_str, debug=debug_mode)
-    except Exception as ex:
-        success, job_url = False, None
-        summary = f"Job `{job_name}` failed"
-        if debug_mode:
-            summary += f" with exception: {ex!s}"
-    logging.debug(f"job '{job_name}' finished with {success}")
+        try:
+            await job.async_wait(timeout=config.get("timeout", 60) * 60)  # wait for the job to finish
+            success, summary = finalize_job(job, cutoff_str, debug=debug_mode)
+        except Exception as ex:  # most likely TimeoutError
+            success, summary = False, f"Job `{job_name}` failed"
+            if debug_mode:
+                summary += f" with exception: {ex!s}"
 
-    # open its own session & GitHubAPI to patch the check-run
-    gh2 = GitHubAPI(session, "pr-check-bot", oauth_token=token)
-    await gh2.patch(
-        f"/repos/{owner}/{repo}/check-runs/{check_id}",
+    logging.debug(f"job '{job_name}' finished with {success}")
+    await gh_api.patch(post_check,
         data={
             "status": "completed",
             "completed_at": datetime.datetime.utcnow().isoformat() + "Z",

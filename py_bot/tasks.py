@@ -4,6 +4,7 @@ import logging
 import os
 import shlex
 import textwrap
+import time
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -126,13 +127,12 @@ async def run_repo_job(
 
 def finalize_job(
     job: Job, cutoff_str: str, debug: bool = False
-) -> tuple[bool, str, str]:
+) -> tuple[bool, str]:
     """Finalize the job by updating its status and logs."""
     success = job.status == Status.Completed
     logs = job.logs or "No logs available"
-    job_url = job.link + "&job_detail_tab=logs"
-    if debug:
-        return success, logs, job_url
+    if debug or not cutoff_str:
+        return success, logs
     # in non-debug mode, we cut the logs to avoid too much output
     # we expect the logs to contain the cutoff string twice
     for it in range(2):
@@ -143,4 +143,4 @@ def finalize_job(
         logs = logs[cutoff_index + len(cutoff_str):]
 
     # todo: cleanup job if needed or success
-    return success, logs, job_url
+    return success, logs
