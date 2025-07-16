@@ -181,7 +181,12 @@ async def run_and_complete(
     # open its own session & GitHubAPI to patch the check-run
     gh_api = GitHubAPI(session, "pr-check-bot", oauth_token=token)
     # define initial values
-    success, summary, job, job_url, cutoff_str = None, "", None, None, ""
+    this_teamspace = Teamspace()
+    success = None  # Indicates whether the job succeeded, continue flow while it is None
+    summary = ""  # Summary of the job's execution
+    job = None  # Placeholder for the job object
+    job_url = f"{LIGHTNING_CLOUD_URL}/{this_teamspace.owner.name}/{this_teamspace.name}/jobs/"  # Default value for the job URL
+    cutoff_str = ""  # String used for cutoff processing
     try:
         job, cutoff_str = await run_repo_job(
             cfg_file_name=cfg_file_name, config=config, params=params, repo_dir=repo_dir, job_name=job_name
@@ -205,7 +210,7 @@ async def run_and_complete(
         )
         queue_start = asyncio.get_event_loop().time()
         while True:
-            if job.status in (Status.Running, Status.Stopping, Status.Completed, Status.Stopped, Status.Failed):
+            if job.status in VALID_JOB_STATUSES:
                 break
             if asyncio.get_event_loop().time() - queue_start > JOB_QUEUE_TIMEOUT:
                 success, summary = (
