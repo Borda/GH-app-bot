@@ -1,6 +1,7 @@
 import asyncio
 import datetime
 import logging
+import re
 import shutil
 from pathlib import Path
 from typing import Any
@@ -13,9 +14,14 @@ from lightning_sdk.lightning_cloud.env import LIGHTNING_CLOUD_URL
 from py_bot.tasks import _download_repo_and_extract, finalize_job, run_repo_job
 from py_bot.utils import generate_matrix_from_config, is_triggered_by_event, load_configs_from_folder
 
+ANSI_ESCAPE = re.compile(r'\x1B\[[0-?]*[ -/]*[@-~]')
 JOB_QUEUE_TIMEOUT = 60 * 60  # 1 hour
 JOB_QUEUE_INTERVAL = 10  # 10 seconds
 STATUS_RUNNING_OR_FINISHED = {Status.Running, Status.Stopping, Status.Completed, Status.Stopped, Status.Failed}
+
+
+def strip_ansi(text: str) -> str:
+    return ANSI_ESCAPE.sub('', text)
 
 # async def on_pr_sync_simple(event, gh, *args: Any, **kwargs: Any) -> None:
 #     owner = event.data["repository"]["owner"]["login"]
@@ -258,7 +264,7 @@ async def run_and_complete(
                 "title": "Job results",
                 "summary": summary,
                 # todo: consider improve parsing and formatting with MD
-                "text": results or "No results available",
+                "text": f"```console\n{strip_ansi(results)}\n```" or "No results available",
             },
             "details_url": job_url,
         },
