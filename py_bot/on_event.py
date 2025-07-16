@@ -5,7 +5,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-import aiohttp
+from aiohttp import ClientSession
 from gidgethub.aiohttp import GitHubAPI
 from lightning_sdk import Status, Teamspace
 from lightning_sdk.lightning_cloud.env import LIGHTNING_CLOUD_URL
@@ -158,10 +158,10 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
     shutil.rmtree(repo_dir, ignore_errors=True)
 
 
-# Decorator to inject aiohttp.ClientSession
+# Decorator to inject ClientSession
 def with_aiohttp_session(func):
     async def wrapper(*args, **kwargs):
-        async with aiohttp.ClientSession() as session:
+        async with ClientSession() as session:
             return await func(*args, session=session, **kwargs)
 
     return wrapper
@@ -176,7 +176,7 @@ async def run_and_complete(
     config: dict,
     params: dict,
     repo_dir: str | Path,
-    session=None,
+    session: ClientSession = None,
 ) -> None:
     debug_mode = config.get("mode", "info") == "debug"
     # open its own session & GitHubAPI to patch the check-run
@@ -197,6 +197,8 @@ async def run_and_complete(
         success, summary = False, f"Job `{job_name}` failed."
         if debug_mode:
             results = f"{ex!s}"
+        else:
+            logging.error(f"Failed to run job `{job_name}`: {ex!s}")
     if success is None:
         job_url = job.link + "&job_detail_tab=logs"
         await gh_api.patch(
@@ -242,6 +244,8 @@ async def run_and_complete(
             success, summary = False, f"Job `{job_name}` failed"
             if debug_mode:
                 results = f"{ex!s}"
+            else:
+                logging.error(f"Failed to run job `{job_name}`: {ex!s}")
 
     logging.debug(f"job '{job_name}' finished with {success}")
     await gh_api.patch(
