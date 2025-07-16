@@ -69,7 +69,9 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
     post_check = f"/repos/{owner}/{repo}/check-runs"
 
     # 1) Download the repository at the specified ref
-    repo_dir = await _download_repo_and_extract(owner, repo, head_sha, token)
+    repo_dir = await _download_repo_and_extract(
+        owner=owner, repo=repo, ref=head_sha, token=token, suffix=f"-event-{event.delivery_id}"
+    )
     if not repo_dir.is_dir():
         raise RuntimeError(f"Failed to download or extract repo {owner}/{repo} at {head_sha}")
 

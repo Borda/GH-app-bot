@@ -51,7 +51,7 @@ async def run_sleeping_task(*args: Any, **kwargs: Any):
     return True
 
 
-async def _download_repo_and_extract(owner: str, repo: str, ref: str, token: str) -> Path:
+async def _download_repo_and_extract(owner: str, repo: str, ref: str, token: str, suffix: str = "") -> Path:
     """Download a GitHub repository at a specific ref (branch, tag, commit) and extract it to a temp directory."""
     # 1) Fetch zipball archive
     url = f"https://api.github.com/repos/{owner}/{repo}/zipball/{ref}"
@@ -74,8 +74,15 @@ async def _download_repo_and_extract(owner: str, repo: str, ref: str, token: str
         # 2) Extract everything
         zf.extractall(tempdir)
 
-    # 3) Locate the extracted root folder
-    return tempdir / root_folder
+    # 3) rename the extracted folder if a suffix is provided
+    path_repo = tempdir / root_folder
+    if suffix:
+        new_path_repo = tempdir / f"{root_folder}-{suffix}"
+        assert not new_path_repo.exists(), f"Path {new_path_repo} already exists, cannot rename {path_repo}"
+        path_repo.rename(new_path_repo)
+        path_repo = new_path_repo
+
+    return path_repo
 
 
 async def run_repo_job(
