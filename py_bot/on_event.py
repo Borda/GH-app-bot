@@ -221,6 +221,7 @@ async def run_and_complete(
                     False,
                     f"Job `{job_name}` didn't start within the provided ({JOB_QUEUE_TIMEOUT}) timeout.",
                 )
+                job.stop()
                 break
             await asyncio.sleep(JOB_QUEUE_INTERVAL)
     if success is None:
@@ -241,6 +242,7 @@ async def run_and_complete(
             success, results = finalize_job(job, cutoff_str, debug=debug_mode)
             summary = f"Job `{job_name}` finished with {success}"
         except Exception as ex:  # most likely TimeoutError
+            job.stop()  # todo: drop it when waiting will have arg `stop_on_timeout=True`
             success, summary = False, f"Job `{job_name}` failed"
             if debug_mode:
                 results = f"{ex!s}"
