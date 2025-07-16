@@ -7,10 +7,10 @@ from typing import Any
 
 import aiohttp
 from gidgethub.aiohttp import GitHubAPI
-from lightning_sdk import Teamspace, Status
+from lightning_sdk import Status, Teamspace
 from lightning_sdk.lightning_cloud.env import LIGHTNING_CLOUD_URL
 
-from py_bot.tasks import _download_repo_and_extract, run_repo_job, finalize_job
+from py_bot.tasks import _download_repo_and_extract, finalize_job, run_repo_job
 from py_bot.utils import generate_matrix_from_config, is_triggered_by_event, load_configs_from_folder
 
 JOB_QUEUE_TIMEOUT = 60 * 60  # 1 hour
@@ -146,7 +146,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
                         cfg_file_name=cfg_file_name,
                         config=config,
                         params=params,
-                        repo_dir=repo_dir
+                        repo_dir=repo_dir,
                     )
                 )
             )
@@ -162,7 +162,9 @@ def with_aiohttp_session(func):
     async def wrapper(*args, **kwargs):
         async with aiohttp.ClientSession() as session:
             return await func(*args, session=session, **kwargs)
+
     return wrapper
+
 
 @with_aiohttp_session
 async def run_and_complete(
@@ -190,7 +192,8 @@ async def run_and_complete(
             summary += f" with exception: {ex!s}"
     if success is None:
         job_url = job.link + "&job_detail_tab=logs"
-        await gh_api.patch(post_check,
+        await gh_api.patch(
+            post_check,
             data={
                 "status": "queued",
                 "output": {
@@ -205,11 +208,15 @@ async def run_and_complete(
             if job.status in (Status.Running, Status.Stopping, Status.Completed, Status.Stopped, Status.Failed):
                 break
             if asyncio.get_event_loop().time() - queue_start > JOB_QUEUE_TIMEOUT:
-                success, summary = False, f"Job `{job_name}` didn't start within the provided ({JOB_QUEUE_TIMEOUT}) timeout."
+                success, summary = (
+                    False,
+                    f"Job `{job_name}` didn't start within the provided ({JOB_QUEUE_TIMEOUT}) timeout.",
+                )
                 break
             await asyncio.sleep(JOB_QUEUE_INTERVAL)
     if success is None:
-        await gh_api.patch(post_check,
+        await gh_api.patch(
+            post_check,
             data={
                 "status": "in_progress",
                 "started_at": datetime.datetime.utcnow().isoformat() + "Z",
@@ -229,13 +236,14 @@ async def run_and_complete(
                 summary += f" with exception: {ex!s}"
 
     logging.debug(f"job '{job_name}' finished with {success}")
-    await gh_api.patch(post_check,
+    await gh_api.patch(
+        post_check,
         data={
             "status": "completed",
             "completed_at": datetime.datetime.utcnow().isoformat() + "Z",
             "conclusion": "success" if success else "failure",
             "output": {
-                "title": f"Job results",
+                "title": "Job results",
                 # todo: consider improve parsing and formatting with MD
                 "summary": f"```\n{summary}\n```",
             },
