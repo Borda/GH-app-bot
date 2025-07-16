@@ -134,7 +134,7 @@ async def run_repo_job(
 def finalize_job(job: Job, cutoff_str: str, debug: bool = False) -> tuple[bool, str]:
     """Finalize the job by updating its status and logs."""
     success = job.status == Status.Completed
-    logs = strip_ansi(job.logs) or "No logs available"
+    logs = strip_ansi(job.logs or "No logs available")
     if debug or not cutoff_str:
         return success, logs
     # in non-debug mode, we cut the logs to avoid too much output

@@ -258,7 +258,7 @@ async def run_and_complete(
                 "title": "Job results",
                 "summary": summary,
                 # todo: consider improve parsing and formatting with MD
-                "text": f"```console\n{results}\n```" or "No results available",
+                "text": f"```console\n{results or 'No results available'}\n```",
             },
             "details_url": job_url,
         },
