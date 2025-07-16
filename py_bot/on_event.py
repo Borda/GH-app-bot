@@ -15,6 +15,7 @@ from py_bot.utils import generate_matrix_from_config, is_triggered_by_event, loa
 
 JOB_QUEUE_TIMEOUT = 60 * 60  # 1 hour
 JOB_QUEUE_INTERVAL = 10  # 10 seconds
+STATUS_RUNNING_OR_FINISHED = {Status.Running, Status.Stopping, Status.Completed, Status.Stopped, Status.Failed}
 
 # async def on_pr_sync_simple(event, gh, *args: Any, **kwargs: Any) -> None:
 #     owner = event.data["repository"]["owner"]["login"]
@@ -185,7 +186,7 @@ async def run_and_complete(
     success = None  # Indicates whether the job succeeded, continue flow while it is None
     summary = ""  # Summary of the job's execution
     job = None  # Placeholder for the job object
-    job_url = f"{LIGHTNING_CLOUD_URL}/{this_teamspace.owner.name}/{this_teamspace.name}/jobs/"  # Default value for the job URL
+    job_url = f"{LIGHTNING_CLOUD_URL}/{this_teamspace.owner.name}/{this_teamspace.name}/jobs/"  # Link to all jobs
     cutoff_str = ""  # String used for cutoff processing
     try:
         job, cutoff_str = await run_repo_job(
@@ -210,7 +211,7 @@ async def run_and_complete(
         )
         queue_start = asyncio.get_event_loop().time()
         while True:
-            if job.status in VALID_JOB_STATUSES:
+            if job.status in STATUS_RUNNING_OR_FINISHED:
                 break
             if asyncio.get_event_loop().time() - queue_start > JOB_QUEUE_TIMEOUT:
                 success, summary = (
