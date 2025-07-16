@@ -10,7 +10,7 @@ from gidgethub.aiohttp import GitHubAPI
 from lightning_sdk import Status, Teamspace
 from lightning_sdk.lightning_cloud.env import LIGHTNING_CLOUD_URL
 
-from py_bot.tasks import _download_repo_and_extract, finalize_job, run_repo_job
+from py_bot.tasks import download_repo_and_extract, finalize_job, run_repo_job
 from py_bot.utils import generate_matrix_from_config, is_triggered_by_event, load_configs_from_folder
 
 JOB_QUEUE_TIMEOUT = 60 * 60  # 1 hour
@@ -69,7 +69,9 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
     post_check = f"/repos/{owner}/{repo}/check-runs"
 
     # 1) Download the repository at the specified ref
-    repo_dir = await _download_repo_and_extract(owner, repo, head_sha, token)
+    repo_dir = await download_repo_and_extract(
+        owner=owner, repo=repo, ref=head_sha, token=token, suffix=f"-event-{event.delivery_id}"
+    )
     if not repo_dir.is_dir():
         raise RuntimeError(f"Failed to download or extract repo {owner}/{repo} at {head_sha}")
 
