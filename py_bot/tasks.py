@@ -78,7 +78,8 @@ async def _download_repo_and_extract(owner: str, repo: str, ref: str, token: str
     path_repo = tempdir / root_folder
     if suffix:
         new_path_repo = tempdir / f"{root_folder}-{suffix}"
-        assert not new_path_repo.exists(), f"Path {new_path_repo} already exists, cannot rename {path_repo}"
+        if new_path_repo.exists():
+            raise FileExistsError(f"Path {new_path_repo} already exists, cannot rename {path_repo}")
         path_repo.rename(new_path_repo)
         path_repo = new_path_repo
 
