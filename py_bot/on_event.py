@@ -133,22 +133,20 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
                     "details_url": link_lightning_jobs,
                 },
             )
-            check_id = check["id"]
+            job_name = f"ci-run_{owner}-{repo}-{head_sha}-{task_name.replace(' ', '_')}"
+            post_check_id = f"/repos/{owner}/{repo}/check-runs/{check['id']}"
 
             # detach with only the token, owner, repo, etc.
             tasks.append(
                 asyncio.create_task(
                     run_and_complete(
                         token=token,
-                        owner=owner,
-                        repo=repo,
-                        ref=head_sha,
+                        post_check=post_check_id,
+                        job_name=job_name,
                         cfg_file_name=cfg_file_name,
                         config=config,
                         params=params,
-                        repo_dir=repo_dir,
-                        task_name=task_name,
-                        check_id=check_id,
+                        repo_dir=repo_dir
                     )
                 )
             )
@@ -169,22 +167,17 @@ def with_aiohttp_session(func):
 @with_aiohttp_session
 async def run_and_complete(
     token: str,
-    owner: str,
-    repo: str,
-    ref: str,
+    post_check: str,
+    job_name: str,
     cfg_file_name: str,
     config: dict,
     params: dict,
     repo_dir: str | Path,
-    task_name: str,
-    check_id,
     session=None,
 ) -> None:
-    job_name = f"ci-run_{owner}-{repo}-{ref}-{task_name.replace(' ', '_')}"
     debug_mode = config.get("mode", "info") == "debug"
     # open its own session & GitHubAPI to patch the check-run
     gh_api = GitHubAPI(session, "pr-check-bot", oauth_token=token)
-    post_check = f"/repos/{owner}/{repo}/check-runs"
     # define initial values
     success, summary, job, job_url, cutoff_str = None, "", None, None, ""
     try:
@@ -242,7 +235,7 @@ async def run_and_complete(
             "completed_at": datetime.datetime.utcnow().isoformat() + "Z",
             "conclusion": "success" if success else "failure",
             "output": {
-                "title": f"{task_name} result",
+                "title": f"Job results",
                 # todo: consider improve parsing and formatting with MD
                 "summary": f"```\n{summary}\n```",
             },
