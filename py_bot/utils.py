@@ -97,7 +97,7 @@ def load_configs_from_folder(path_dir: str | Path = ".lightning/workflows") -> l
     """List all configuration files in the given path."""
     path_dir = Path(path_dir).resolve()
     if not path_dir.is_dir():
-        raise ValueError(f"Provided path is not a directory: {path_dir}")
+        raise ValueError(f"Directory '{path_dir}' with expected action confing does not exists.")
 
     ls_files = glob.glob(str(path_dir / "*.yaml")) + glob.glob(str(path_dir / "*.yml"))
     if not ls_files:
