@@ -2,6 +2,7 @@ import asyncio
 import io
 import logging
 import os
+import re
 import shlex
 import textwrap
 import zipfile
@@ -37,6 +38,12 @@ BASH_BOX_FUNC = textwrap.dedent("""\
   }
 """)
 
+ANSI_ESCAPE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
+
+
+def strip_ansi(text: str) -> str:
+    return ANSI_ESCAPE.sub("", text)
+
 
 async def run_sleeping_task(*args: Any, **kwargs: Any):
     # Replace it with real logic; here we just succeed
@@ -71,7 +78,9 @@ async def _download_repo_and_extract(owner: str, repo: str, ref: str, token: str
     return tempdir / root_folder
 
 
-async def run_repo_job(cfg_file_name: str, config: dict, params: dict, repo_dir: str, job_name: str) -> tuple[Job, str]:
+async def run_repo_job(
+    cfg_file_name: str, config: dict, params: dict, repo_dir: str | Path, job_name: str
+) -> tuple[Job, str]:
     """Download the full repo at `ref` into a tempdir, look for config and execute the job."""
     # mandatory
     config_run = config["run"]
@@ -125,7 +134,7 @@ async def run_repo_job(cfg_file_name: str, config: dict, params: dict, repo_dir:
 def finalize_job(job: Job, cutoff_str: str, debug: bool = False) -> tuple[bool, str]:
     """Finalize the job by updating its status and logs."""
     success = job.status == Status.Completed
-    logs = job.logs or "No logs available"
+    logs = strip_ansi(job.logs or "No logs available")
     if debug or not cutoff_str:
         return success, logs
     # in non-debug mode, we cut the logs to avoid too much output

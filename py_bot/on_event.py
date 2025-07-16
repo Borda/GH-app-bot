@@ -5,7 +5,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-import aiohttp
+from aiohttp import ClientSession
 from gidgethub.aiohttp import GitHubAPI
 from lightning_sdk import Status, Teamspace
 from lightning_sdk.lightning_cloud.env import LIGHTNING_CLOUD_URL
@@ -122,7 +122,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
         parameters = generate_matrix_from_config(config.get("parametrize", {}))
         for _, params in enumerate(parameters):
             name = params.get("name") or cfg_name
-            task_name = f"{cfg_file_name} / {name} ({', '.join(params.values())})"
+            task_name = f"{cfg_file_name} / {name} ({', '.join([p or 'n/a' for p in params.values()])})"
             logging.debug(f"=> pull_request: synchronize -> {task_name=}")
             # Create a check run
             check = await gh.post(
@@ -158,10 +158,10 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
     shutil.rmtree(repo_dir, ignore_errors=True)
 
 
-# Decorator to inject aiohttp.ClientSession
+# Decorator to inject ClientSession
 def with_aiohttp_session(func):
     async def wrapper(*args, **kwargs):
-        async with aiohttp.ClientSession() as session:
+        async with ClientSession() as session:
             return await func(*args, session=session, **kwargs)
 
     return wrapper
@@ -176,7 +176,7 @@ async def run_and_complete(
     config: dict,
     params: dict,
     repo_dir: str | Path,
-    session=None,
+    session: ClientSession = None,
 ) -> None:
     debug_mode = config.get("mode", "info") == "debug"
     # open its own session & GitHubAPI to patch the check-run
@@ -185,6 +185,7 @@ async def run_and_complete(
     this_teamspace = Teamspace()
     success = None  # Indicates whether the job succeeded, continue flow while it is None
     summary = ""  # Summary of the job's execution
+    results = ""  # Full output of the job, if any
     job = None  # Placeholder for the job object
     job_url = f"{LIGHTNING_CLOUD_URL}/{this_teamspace.owner.name}/{this_teamspace.name}/jobs/"  # Link to all jobs
     cutoff_str = ""  # String used for cutoff processing
@@ -193,9 +194,11 @@ async def run_and_complete(
             cfg_file_name=cfg_file_name, config=config, params=params, repo_dir=repo_dir, job_name=job_name
         )
     except Exception as ex:
-        success, summary = False, f"Job `{job_name}` failed"
+        success, summary = False, f"Job `{job_name}` failed."
         if debug_mode:
-            summary += f" with exception: {ex!s}"
+            results = f"{ex!s}"
+        else:
+            logging.error(f"Failed to run job `{job_name}`: {ex!s}")
     if success is None:
         job_url = job.link + "&job_detail_tab=logs"
         await gh_api.patch(
@@ -235,11 +238,14 @@ async def run_and_complete(
         )
         try:
             await job.async_wait(timeout=config.get("timeout", 60) * 60)  # wait for the job to finish
-            success, summary = finalize_job(job, cutoff_str, debug=debug_mode)
+            success, results = finalize_job(job, cutoff_str, debug=debug_mode)
+            summary = f"Job `{job_name}` finished with {success}"
         except Exception as ex:  # most likely TimeoutError
             success, summary = False, f"Job `{job_name}` failed"
             if debug_mode:
-                summary += f" with exception: {ex!s}"
+                results = f"{ex!s}"
+            else:
+                logging.error(f"Failed to run job `{job_name}`: {ex!s}")
 
     logging.debug(f"job '{job_name}' finished with {success}")
     await gh_api.patch(
@@ -250,8 +256,9 @@ async def run_and_complete(
             "conclusion": "success" if success else "failure",
             "output": {
                 "title": "Job results",
+                "summary": summary,
                 # todo: consider improve parsing and formatting with MD
-                "summary": f"```\n{summary}\n```",
+                "text": f"```console\n{results or 'No results available'}\n```",
             },
             "details_url": job_url,
         },
