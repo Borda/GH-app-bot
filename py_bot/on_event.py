@@ -7,14 +7,14 @@ from typing import Any
 
 import aiohttp
 from gidgethub.aiohttp import GitHubAPI
-from lightning_sdk import Teamspace
+from lightning_sdk import Teamspace, Status
 from lightning_sdk.lightning_cloud.env import LIGHTNING_CLOUD_URL
 
-from py_bot.tasks import _download_repo_and_extract, run_repo_job
+from py_bot.tasks import _download_repo_and_extract, run_repo_job, finalize_job
 from py_bot.utils import generate_matrix_from_config, is_triggered_by_event, load_configs_from_folder
 
-MAX_SUMMARY_LENGTH = 64000
-
+JOB_QUEUE_TIMEOUT = 60 * 60  # 1 hour
+JOB_QUEUE_INTERVAL = 10  # 10 seconds
 
 # async def on_pr_sync_simple(event, gh, *args: Any, **kwargs: Any) -> None:
 #     owner = event.data["repository"]["owner"]["login"]
@@ -129,8 +129,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
                 data={
                     "name": task_name,
                     "head_sha": head_sha,
-                    "status": "in_progress",  # todo: make it also as queued before job starts
-                    "started_at": datetime.datetime.utcnow().isoformat() + "Z",
+                    "status": "queued",
                     "details_url": link_lightning_jobs,
                 },
             )
@@ -160,6 +159,14 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
     shutil.rmtree(repo_dir, ignore_errors=True)
 
 
+# Decorator to inject aiohttp.ClientSession
+def with_aiohttp_session(func):
+    async def wrapper(*args, **kwargs):
+        async with aiohttp.ClientSession() as session:
+            return await func(*args, session=session, **kwargs)
+    return wrapper
+
+@with_aiohttp_session
 async def run_and_complete(
     token: str,
     owner: str,
@@ -171,31 +178,61 @@ async def run_and_complete(
     repo_dir: str | Path,
     task_name: str,
     check_id,
+    session=None,
 ) -> None:
-    # run the job with docker in the repo directory
     job_name = f"ci-run_{owner}-{repo}-{ref}-{task_name.replace(' ', '_')}"
+    debug_mode = config.get("mode", "info") == "debug"
     try:
-        success, summary, job_url = await run_repo_job(
+        job, cutoff_str = await run_repo_job(
             cfg_file_name=cfg_file_name, config=config, params=params, repo_dir=repo_dir, job_name=job_name
         )
-    except Exception as ex:
-        success, summary, job_url = False, f"Job failed with error: \n{ex!s}", None
-    logging.debug(f"job '{job_name}' finished with {success}")
-
-    # open its own session & GitHubAPI to patch the check-run
-    async with aiohttp.ClientSession() as session:
+        job_url = job.link + "&job_detail_tab=logs"
         gh2 = GitHubAPI(session, "pr-check-bot", oauth_token=token)
         await gh2.patch(
             f"/repos/{owner}/{repo}/check-runs/{check_id}",
             data={
-                "status": "completed",
-                "completed_at": datetime.datetime.utcnow().isoformat() + "Z",
-                "conclusion": "success" if success else "failure",
-                "output": {
-                    "title": f"{task_name} result",
-                    # todo: consider improve parsing and formatting with MD
-                    "summary": f"```\n{summary[:MAX_SUMMARY_LENGTH]}\n```",
-                },
+                "status": "queued",
                 "details_url": job_url,
             },
         )
+        queue_start = asyncio.get_event_loop().time()
+        while True:
+            if job.status in (Status.Running, Status.Stopping, Status.Completed, Status.Stopped, Status.Failed):
+                break
+            if asyncio.get_event_loop().time() - queue_start > JOB_QUEUE_TIMEOUT:
+                raise TimeoutError(f"Job didn't started within the provided ({JOB_QUEUE_TIMEOUT}) timeout.")
+            await asyncio.sleep(JOB_QUEUE_INTERVAL)
+        gh2 = GitHubAPI(session, "pr-check-bot", oauth_token=token)
+        await gh2.patch(
+            f"/repos/{owner}/{repo}/check-runs/{check_id}",
+            data={
+                "status": "in_progress",
+                "started_at": datetime.datetime.utcnow().isoformat() + "Z",
+                "details_url": job_url,
+            },
+        )
+        await job.async_wait(timeout=config.get("timeout", 60) * 60)  # wait for the job to finish
+        success, summary, job_url = finalize_job(job, cutoff_str, debug=debug_mode)
+    except Exception as ex:
+        success, job_url = False, None
+        summary = f"Job `{job_name}` failed"
+        if debug_mode:
+            summary += f" with exception: {ex!s}"
+    logging.debug(f"job '{job_name}' finished with {success}")
+
+    # open its own session & GitHubAPI to patch the check-run
+    gh2 = GitHubAPI(session, "pr-check-bot", oauth_token=token)
+    await gh2.patch(
+        f"/repos/{owner}/{repo}/check-runs/{check_id}",
+        data={
+            "status": "completed",
+            "completed_at": datetime.datetime.utcnow().isoformat() + "Z",
+            "conclusion": "success" if success else "failure",
+            "output": {
+                "title": f"{task_name} result",
+                # todo: consider improve parsing and formatting with MD
+                "summary": f"```\n{summary}\n```",
+            },
+            "details_url": job_url,
+        },
+    )
