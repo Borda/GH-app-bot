@@ -7,7 +7,7 @@ from typing import Any
 
 import aiohttp
 from gidgethub.aiohttp import GitHubAPI
-from lightning_sdk import Teamspace
+from lightning_sdk import Status, Teamspace
 from lightning_sdk.lightning_cloud.env import LIGHTNING_CLOUD_URL
 
 from py_bot.tasks import _download_repo_and_extract, finalize_job, run_repo_job
