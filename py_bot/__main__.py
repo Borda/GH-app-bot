@@ -9,7 +9,6 @@ from gidgethub import routing
 from py_bot.handling import handle_with_offloaded_tasks
 from py_bot.on_event import on_code_changed
 
-
 def _load_validate_required_env_vars() -> tuple[str, str, str]:
     """Ensure required environment variables are set."""
     github_app_id = os.getenv("GITHUB_APP_ID")

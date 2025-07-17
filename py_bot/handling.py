@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import time
 
 import aiohttp
@@ -66,14 +67,27 @@ async def process_async_event(event, router, github_app_id: str, private_key: st
 
 async def handle_with_offloaded_tasks(request, github_app_id: str, private_key: str, webhooks_secret: str = ""):
     """Minimal HTTP handler: read the webhook, schedule processing, and ack."""
-    body = await request.read()
-    event = sansio.Event.from_http(request.headers, body, secret=webhooks_secret)
+    # Read the raw body, handling client disconnects
+    try:
+        body = await request.read()
+    except ConnectionResetError:
+        logging.warning("Client disconnected before request body was fully read")
+        return web.Response(status=400)
 
-    # Get router from request app
+    # Parse the GitHub webhook event, validating signature
+    try:
+        event = sansio.Event.from_http(request.headers, body, secret=webhooks_secret)
+    except Exception as exc:
+        logging.error("Failed to parse webhook event", exc_info=exc)
+        return web.Response(status=400)
+
+    # Get the router from the app context
     router = request.app["router"]
 
-    # Schedule background processing with router
-    asyncio.create_task(process_async_event(event, router, github_app_id=github_app_id, private_key=private_key))
+    # Offload event processing to a background task
+    asyncio.create_task(
+        process_async_event(event, router, github_app_id=github_app_id, private_key=private_key)
+    )
 
-    # Acknowledge immediately
+    # Immediately acknowledge receipt
     return web.Response(status=200)
