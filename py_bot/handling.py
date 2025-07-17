@@ -85,9 +85,7 @@ async def handle_with_offloaded_tasks(request, github_app_id: str, private_key: 
     router = request.app["router"]
 
     # Offload event processing to a background task
-    asyncio.create_task(
-        process_async_event(event, router, github_app_id=github_app_id, private_key=private_key)
-    )
+    asyncio.create_task(process_async_event(event, router, github_app_id=github_app_id, private_key=private_key))
 
     # Immediately acknowledge receipt
     return web.Response(status=200)

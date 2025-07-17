@@ -2,6 +2,8 @@ import asyncio
 import datetime
 import logging
 import shutil
+from collections.abc import Callable
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -145,13 +147,13 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
             )
             job_name = f"ci-run_{repo_owner}-{repo_name}-{head_sha}-{task_name.replace(' ', '_')}"
             post_check_id = f"/repos/{repo_owner}/{repo_name}/check-runs/{check['id']}"
+            patch_this_check_run = partial(_patch_check_run, token=token, post_check=post_check_id)
 
             # detach with only the token, owner, repo, etc.
             tasks.append(
                 asyncio.create_task(
                     run_and_complete(
-                        token=token,
-                        post_check=post_check_id,
+                        fn_patch_check_run=patch_this_check_run,
                         job_name=job_name,
                         cfg_file_name=cfg_file_name,
                         config=config,
@@ -177,19 +179,21 @@ def with_aiohttp_session(func):
 
 
 @with_aiohttp_session
+async def _patch_check_run(token, post_check, data, session: ClientSession = None):
+    # open its own session & GitHubAPI to patch the check-run
+    gh_api = GitHubAPI(session, "pr-check-bot", oauth_token=token)
+    await gh_api.patch(post_check, data=data)
+
+
 async def run_and_complete(
-    token: str,
-    post_check: str,
+    fn_patch_check_run: Callable,
     job_name: str,
     cfg_file_name: str,
     config: dict,
     params: dict,
     repo_dir: str | Path,
-    session: ClientSession = None,
 ) -> None:
     debug_mode = config.get("mode", "info") == "debug"
-    # open its own session & GitHubAPI to patch the check-run
-    gh_api = GitHubAPI(session, "pr-check-bot", oauth_token=token)
     # define initial values
     this_teamspace = Teamspace()
     success = None  # Indicates whether the job succeeded, continue flow while it is None
@@ -198,6 +202,7 @@ async def run_and_complete(
     job = None  # Placeholder for the job object
     job_url = f"{LIGHTNING_CLOUD_URL}/{this_teamspace.owner.name}/{this_teamspace.name}/jobs/"  # Link to all jobs
     cutoff_str = ""  # String used for cutoff processing
+
     try:
         job, cutoff_str = await run_repo_job(
             cfg_file_name=cfg_file_name, config=config, params=params, repo_dir=repo_dir, job_name=job_name
@@ -208,10 +213,10 @@ async def run_and_complete(
             results = f"{ex!s}"
         else:
             logging.error(f"Failed to run job `{job_name}`: {ex!s}")
+
     if success is None:
         job_url = job.link + "&job_detail_tab=logs"
-        await gh_api.patch(
-            post_check,
+        await fn_patch_check_run(
             data={
                 "status": "queued",
                 "output": {
@@ -233,9 +238,9 @@ async def run_and_complete(
                 job.stop()
                 break
             await asyncio.sleep(JOB_QUEUE_INTERVAL)
+
     if success is None:
-        await gh_api.patch(
-            post_check,
+        await fn_patch_check_run(
             data={
                 "status": "in_progress",
                 "started_at": datetime.datetime.utcnow().isoformat() + "Z",
@@ -262,8 +267,7 @@ async def run_and_complete(
     logging.info(f"job '{job_name}' finished with {success}")
     if len(results) > MAX_OUTPUT_LENGTH:
         results = results[: MAX_OUTPUT_LENGTH - 20] + "\n…(truncated)"
-    await gh_api.patch(
-        post_check,
+    await fn_patch_check_run(
         data={
             "status": "completed",
             "completed_at": datetime.datetime.utcnow().isoformat() + "Z",

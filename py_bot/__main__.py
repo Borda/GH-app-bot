@@ -9,6 +9,7 @@ from gidgethub import routing
 from py_bot.handling import handle_with_offloaded_tasks
 from py_bot.on_event import on_code_changed
 
+
 def _load_validate_required_env_vars() -> tuple[str, str, str]:
     """Ensure required environment variables are set."""
     github_app_id = os.getenv("GITHUB_APP_ID")
@@ -47,4 +48,4 @@ if __name__ == "__main__":
     )
 
     logging.info("starting…")
-    web.run_app(app, host="0.0.0.0", port=8080)
+    web.run_app(app, host="0.0.0.0", port=8080, access_log=None)
