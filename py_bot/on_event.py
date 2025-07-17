@@ -158,7 +158,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
             )
             job_name = f"ci-run_{repo_owner}-{repo_name}-{head_sha}-{task_name.replace(' ', '_')}"
             post_check_id = f"/repos/{repo_owner}/{repo_name}/check-runs/{check['id']}"
-            patch_this_check_run = partial(patch_check_run, token=token, post_check=post_check_id)
+            patch_this_check_run = partial(patch_check_run, token=token, url=post_check_id)
 
             # detach with only the token, owner, repo, etc.
             tasks.append(
