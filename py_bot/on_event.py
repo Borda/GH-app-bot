@@ -7,7 +7,7 @@ from functools import partial
 from pathlib import Path
 from typing import Any
 
-from aiohttp import ClientSession
+from aiohttp import ClientSession, client_exceptions
 from gidgethub.aiohttp import GitHubAPI
 from lightning_sdk import Status, Teamspace
 from lightning_sdk.lightning_cloud.env import LIGHTNING_CLOUD_URL
@@ -57,6 +57,17 @@ MAX_OUTPUT_LENGTH = 65525  # GitHub API limit for check-run output.text
 #     )
 
 
+async def post_with_retry(gh, url, data, retries=3, backoff=1.0) -> Any:
+    for it in range(1, retries + 1):
+        try:
+            return await gh.post(url, data=data)
+        except client_exceptions.ServerDisconnectedError:
+            if it == retries:
+                raise
+            await asyncio.sleep(backoff * it)
+    return None
+
+
 async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> None:
     # figure out the commit SHA and branch ref
     if event.event == "push":
@@ -69,7 +80,8 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
     repo_name = event.data["repository"]["name"]
     this_teamspace = Teamspace()
     link_lightning_jobs = f"{LIGHTNING_CLOUD_URL}/{this_teamspace.owner.name}/{this_teamspace.name}/jobs/"
-    post_check = f"/repos/{repo_owner}/{repo_name}/check-runs"
+    # Create a partial function for posting check runs
+    post_check = partial(post_with_retry, gh=gh, url=f"/repos/{repo_owner}/{repo_name}/check-runs")
 
     # 1) Download the repository at the specified ref
     repo_dir = await download_repo_and_extract(
@@ -88,8 +100,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
         config_error = ex
     if not configs:
         logging.warn(f"No valid configs found in {config_dir}")
-        await gh.post(
-            post_check,
+        await post_check(
             data={
                 "name": "Lit bot",
                 "head_sha": head_sha,
@@ -113,8 +124,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
         if not is_triggered_by_event(event=event.event, branch=branch_ref, trigger=config.get("trigger")):
             if event.event in config.get("trigger", []):
                 # there is a trigger for this event, but it is not matched
-                await gh.post(
-                    post_check,
+                await post_check(
                     data={
                         "name": f"{cfg_file_name} / {cfg_name} [{event.event}]",
                         "head_sha": head_sha,
@@ -136,8 +146,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
             task_name = f"{cfg_file_name} / {name} ({', '.join([p or 'n/a' for p in params.values()])})"
             logging.debug(f"=> pull_request: synchronize -> {task_name=}")
             # Create a check run
-            check = await gh.post(
-                post_check,
+            check = await post_check(
                 data={
                     "name": task_name,
                     "head_sha": head_sha,
