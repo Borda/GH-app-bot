@@ -18,14 +18,14 @@ JOB_QUEUE_INTERVAL = 10  # 10 seconds
 STATUS_RUNNING_OR_FINISHED = {Status.Running, Status.Stopping, Status.Completed, Status.Stopped, Status.Failed}
 
 # async def on_pr_sync_simple(event, gh, *args: Any, **kwargs: Any) -> None:
-#     owner = event.data["repository"]["owner"]["login"]
-#     repo = event.data["repository"]["name"]
+#     repo_owner = event.data["repository"]["owner"]["login"]
+#     repo_name = event.data["repository"]["name"]
 #     head_sha = event.data["pull_request"]["head"]["sha"]
-#     logging.debug(f"-> pull_request: synchronize -> {owner=} {repo=} {head_sha=}")
+#     logging.debug(f"-> pull_request: synchronize -> {repo_owner=} {repo_name=} {head_sha=}")
 #
 #     # 1) Create an in_progress check run
 #     check = await gh.post(
-#         f"/repos/{owner}/{repo}/check-runs",
+#         f"/repos/{repo_owner}/{repo_name}/check-runs",
 #         data={
 #             "name": "PR Extra Task",
 #             "head_sha": head_sha,
@@ -41,7 +41,7 @@ STATUS_RUNNING_OR_FINISHED = {Status.Running, Status.Stopping, Status.Completed,
 #     # 3) Complete the check run
 #     conclusion = "success" if success else "failure"
 #     await gh.patch(
-#         f"/repos/{owner}/{repo}/check-runs/{check_id}",
+#         f"/repos/{repo_owner}/{repo_name}/check-runs/{check_id}",
 #         data={
 #             "status": "completed",
 #             "completed_at": datetime.utcnow().isoformat() + "Z",
@@ -62,24 +62,25 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
     else:  # pull_request
         head_sha = event.data["pull_request"]["head"]["sha"]
         branch_ref = event.data["pull_request"]["base"]["ref"]
-    owner = event.data["repository"]["owner"]["login"]
-    repo = event.data["repository"]["name"]
+    repo_owner = event.data["repository"]["owner"]["login"]
+    repo_name = event.data["repository"]["name"]
     this_teamspace = Teamspace()
     link_lightning_jobs = f"{LIGHTNING_CLOUD_URL}/{this_teamspace.owner.name}/{this_teamspace.name}/jobs/"
-    post_check = f"/repos/{owner}/{repo}/check-runs"
+    post_check = f"/repos/{repo_owner}/{repo_name}/check-runs"
 
     # 1) Download the repository at the specified ref
     repo_dir = await download_repo_and_extract(
-        owner=owner, repo=repo, ref=head_sha, token=token, suffix=f"-event-{event.delivery_id}"
+        repo_owner=repo_owner, repo_name=repo_name, ref=head_sha, token=token, suffix=f"-event-{event.delivery_id}"
     )
     if not repo_dir.is_dir():
-        raise RuntimeError(f"Failed to download or extract repo {owner}/{repo} at {head_sha}")
+        raise RuntimeError(f"Failed to download or extract repo {repo_owner}/{repo_name} at {head_sha}")
 
     # 2) Read the config file
     repo_dir = Path(repo_dir).resolve()
-    configs = load_configs_from_folder(repo_dir / ".lightning" / "workflows")
+    config_dir = repo_dir / ".lightning" / "workflows"
+    configs = load_configs_from_folder(config_dir)
     if not configs:
-        logging.warn(f"No valid configs found in {repo_dir / '.lightning' / 'workflows'}")
+        logging.warn(f"No valid configs found in {config_dir}")
         await gh.post(
             post_check,
             data={
@@ -136,8 +137,8 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
                     "details_url": link_lightning_jobs,
                 },
             )
-            job_name = f"ci-run_{owner}-{repo}-{head_sha}-{task_name.replace(' ', '_')}"
-            post_check_id = f"/repos/{owner}/{repo}/check-runs/{check['id']}"
+            job_name = f"ci-run_{repo_owner}-{repo_name}-{head_sha}-{task_name.replace(' ', '_')}"
+            post_check_id = f"/repos/{repo_owner}/{repo_name}/check-runs/{check['id']}"
 
             # detach with only the token, owner, repo, etc.
             tasks.append(

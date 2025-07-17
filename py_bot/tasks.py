@@ -51,10 +51,10 @@ async def run_sleeping_task(*args: Any, **kwargs: Any):
     return True
 
 
-async def download_repo_and_extract(owner: str, repo: str, ref: str, token: str, suffix: str = "") -> Path:
+async def download_repo_and_extract(repo_owner: str, repo_name: str, ref: str, token: str, suffix: str = "") -> Path:
     """Download a GitHub repository at a specific ref (branch, tag, commit) and extract it to a temp directory."""
     # 1) Fetch zipball archive
-    url = f"https://api.github.com/repos/{owner}/{repo}/zipball/{ref}"
+    url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/zipball/{ref}"
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json",
