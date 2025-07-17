@@ -70,7 +70,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
 
     # 1) Download the repository at the specified ref
     repo_dir = await download_repo_and_extract(
-        repo_owner=repo_owner, repo_name=repo_name, ref=head_sha, token=token, suffix=f"-event-{event.delivery_id}"
+        repo_owner=repo_owner, repo_name=repo_name, ref=head_sha, token=token, suffix=f"event-{event.delivery_id}"
     )
     if not repo_dir.is_dir():
         raise RuntimeError(f"Failed to download or extract repo {repo_owner}/{repo_name} at {head_sha}")
@@ -78,7 +78,11 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
     # 2) Read the config file
     repo_dir = Path(repo_dir).resolve()
     config_dir = repo_dir / ".lightning" / "workflows"
-    configs = load_configs_from_folder(config_dir)
+    configs, config_error = [], None
+    try:
+        configs = load_configs_from_folder(config_dir)
+    except Exception as ex:
+        config_error = ex
     if not configs:
         logging.warn(f"No valid configs found in {config_dir}")
         await gh.post(
@@ -91,7 +95,8 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
                 "started_at": datetime.datetime.utcnow().isoformat() + "Z",
                 "output": {
                     "title": "No Configs Found",
-                    "summary": "No valid configuration files found in `.lightning/workflows`.",
+                    "summary": "No valid configuration files found in `.lightning/workflows` folder.",
+                    "text": f"```console\n{config_error!s}\n```",
                 },
             },
         )

@@ -62,7 +62,7 @@ async def download_repo_and_extract(repo_owner: str, repo_name: str, ref: str, t
     async with aiohttp.ClientSession() as session, session.get(url, headers=headers) as resp:
         resp.raise_for_status()
         archive_data = await resp.read()
-    logging.debug(f"Pull repo from {url}")
+    logging.info(f"Pull repo from {url}")
 
     # 2) Extract zip into a temp directory
     tempdir = LOCAL_TEMP_DIR.resolve()
@@ -115,7 +115,12 @@ async def run_repo_job(
     # 3) Build the full Docker‐run call using a heredoc
     with_gpus = "" if docker_run_machine.is_cpu() else "--gpus=all"
     job_cmd = (
-        "docker run --rm -i"
+        # early check that executable bash is available
+        f"if [ ! -e {repo_dir}/{docker_run_script} ]; then"
+        f" python -m py_tree -s -d 3; exit 1; "
+        "fi;"
+        # continue with the real docker run
+        " docker run --rm -i"
         f" -v {repo_dir}:/temp_repo"
         " -w /workspace"
         f" {with_gpus} {docker_run_image}"
