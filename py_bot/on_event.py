@@ -16,6 +16,7 @@ from py_bot.utils import generate_matrix_from_config, is_triggered_by_event, loa
 JOB_QUEUE_TIMEOUT = 60 * 60  # 1 hour
 JOB_QUEUE_INTERVAL = 10  # 10 seconds
 STATUS_RUNNING_OR_FINISHED = {Status.Running, Status.Stopping, Status.Completed, Status.Stopped, Status.Failed}
+MAX_OUTPUT_LENGTH = 65525  # GitHub API limit for check-run output.text
 
 # async def on_pr_sync_simple(event, gh, *args: Any, **kwargs: Any) -> None:
 #     repo_owner = event.data["repository"]["owner"]["login"]
@@ -258,7 +259,9 @@ async def run_and_complete(
             else:
                 logging.error(f"Failed to run job `{job_name}`: {ex!s}")
 
-    logging.debug(f"job '{job_name}' finished with {success}")
+    logging.info(f"job '{job_name}' finished with {success}")
+    if len(results) > MAX_OUTPUT_LENGTH:
+        results = results[: MAX_OUTPUT_LENGTH - 20] + "\n…(truncated)"
     await gh_api.patch(
         post_check,
         data={
