@@ -7,7 +7,7 @@ from functools import partial
 from pathlib import Path
 from typing import Any
 
-from aiohttp import ClientSession, client_exceptions
+from aiohttp import ClientSession, ClientTimeout, client_exceptions
 from gidgethub.aiohttp import GitHubAPI
 from lightning_sdk import Status, Teamspace
 from lightning_sdk.lightning_cloud.env import LIGHTNING_CLOUD_URL
@@ -57,7 +57,8 @@ MAX_OUTPUT_LENGTH = 65525  # GitHub API limit for check-run output.text
 #     )
 
 
-async def post_with_retry(gh, url, data, retries=3, backoff=1.0) -> Any:
+async def post_with_retry(gh, url: str, data: dict, retries: int = 3, backoff: float = 1.0) -> Any:
+    """Post data to GitHub API with retries in case of connection issues."""
     for it in range(1, retries + 1):
         try:
             return await gh.post(url, data=data)
@@ -69,6 +70,7 @@ async def post_with_retry(gh, url, data, retries=3, backoff=1.0) -> Any:
 
 
 async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> None:
+    """Handle GitHub webhook events for code changes (push or pull_request)."""
     # figure out the commit SHA and branch ref
     if event.event == "push":
         head_sha = event.data["after"]
@@ -156,7 +158,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
             )
             job_name = f"ci-run_{repo_owner}-{repo_name}-{head_sha}-{task_name.replace(' ', '_')}"
             post_check_id = f"/repos/{repo_owner}/{repo_name}/check-runs/{check['id']}"
-            patch_this_check_run = partial(_patch_check_run, token=token, post_check=post_check_id)
+            patch_this_check_run = partial(patch_check_run, token=token, post_check=post_check_id)
 
             # detach with only the token, owner, repo, etc.
             tasks.append(
@@ -178,20 +180,19 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
     shutil.rmtree(repo_dir, ignore_errors=True)
 
 
-# Decorator to inject ClientSession
-def with_aiohttp_session(func):
-    async def wrapper(*args, **kwargs):
-        async with ClientSession() as session:
-            return await func(*args, session=session, **kwargs)
-
-    return wrapper
-
-
-@with_aiohttp_session
-async def _patch_check_run(token, post_check, data, session: ClientSession = None):
-    # open its own session & GitHubAPI to patch the check-run
-    gh_api = GitHubAPI(session, "pr-check-bot", oauth_token=token)
-    await gh_api.patch(post_check, data=data)
+async def patch_check_run(token: str, url: str, data: dict, retries: int = 3, backoff: float = 1.0) -> Any:
+    """Patch a check run with retries in case of connection issues."""
+    timeout = ClientTimeout(total=60)  # allow up to 60 s to connect/send
+    async with ClientSession(timeout=timeout) as session:
+        gh_api = GitHubAPI(session, "pr-check-bot", oauth_token=token)
+        for it in range(1, retries + 1):  # up to 3 attempts
+            try:
+                return await gh_api.patch(url, data=data)
+            except (asyncio.TimeoutError, client_exceptions.ClientConnectorError):
+                if it == retries:
+                    raise
+                await asyncio.sleep(it * backoff)
+    return None
 
 
 async def run_and_complete(
@@ -202,6 +203,7 @@ async def run_and_complete(
     params: dict,
     repo_dir: str | Path,
 ) -> None:
+    """Run a job and update the check run status."""
     debug_mode = config.get("mode", "info") == "debug"
     # define initial values
     this_teamspace = Teamspace()
