@@ -117,7 +117,8 @@ async def run_repo_job(
     job_cmd = (
         # early check that executable bash is available
         f"if [ ! -e {repo_dir}/{docker_run_script} ]; then"
-        f" python -m py_tree -s -d 3; exit 1; "
+        " find . -type d -name '.git' -exec rm -rf {} +;"  # remove .git dirs to shorten list with py_tree
+        " python -m py_tree -s -d 4; exit 1; "  # depth 4 is to show top-level of the .temp/repo
         "fi;"
         # continue with the real docker run
         " docker run --rm -i"
@@ -139,7 +140,7 @@ async def run_repo_job(
         name=job_name,
         command=job_cmd,
         machine=docker_run_machine,
-        interruptible=config.get("interruptible", False),
+        interruptible=config.get("interruptible", False),  # fixme: loaded as string, convert to bool
     )
     return job, cutoff_str
 

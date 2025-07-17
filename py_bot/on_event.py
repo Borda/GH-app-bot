@@ -271,7 +271,7 @@ async def run_and_complete(
             "output": {
                 "title": "Job results",
                 "summary": summary,
-                # todo: consider improve parsing and formatting with MD
+                # todo: upload the full results as artifact
                 "text": f"```console\n{results or 'No results available'}\n```",
             },
             "details_url": job_url,
