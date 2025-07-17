@@ -211,7 +211,8 @@ async def run_and_complete(
     summary = ""  # Summary of the job's execution
     results = ""  # Full output of the job, if any
     job = None  # Placeholder for the job object
-    job_url = f"{LIGHTNING_CLOUD_URL}/{this_teamspace.owner.name}/{this_teamspace.name}/jobs/"  # Link to all jobs
+    url_job = ""  # URL to the job in Lightning Cloud
+    url_job_table = f"{LIGHTNING_CLOUD_URL}/{this_teamspace.owner.name}/{this_teamspace.name}/jobs/"  # Link to all jobs
     cutoff_str = ""  # String used for cutoff processing
 
     try:
@@ -226,7 +227,7 @@ async def run_and_complete(
             logging.error(f"Failed to run job `{job_name}`: {ex!s}")
 
     if success is None:
-        job_url = job.link + "&job_detail_tab=logs"
+        url_job = job.link + "&job_detail_tab=logs"
         await fn_patch_check_run(
             data={
                 "status": "queued",
@@ -234,7 +235,7 @@ async def run_and_complete(
                     "title": "Job is pending",
                     "summary": "Wait for machine availability",
                 },
-                "details_url": job_url,
+                "details_url": url_job or url_job_table,
             },
         )
         queue_start = asyncio.get_event_loop().time()
@@ -259,7 +260,7 @@ async def run_and_complete(
                     "title": "Job is running",
                     "summary": "Job is running on Lightning Cloud, please wait until it finishes.",
                 },
-                "details_url": job_url,
+                "details_url": url_job or url_job_table,
             },
         )
         try:
@@ -275,7 +276,7 @@ async def run_and_complete(
             else:
                 logging.error(f"Failed to run job `{job_name}`: {ex!s}")
 
-    logging.info(f"job '{job_name}' finished with {success}")
+    logging.info(f"Job finished with {success} >>> {url_job or (url_job_table + ' search for name ' + job_name)}")
     if len(results) > MAX_OUTPUT_LENGTH:
         results = results[: MAX_OUTPUT_LENGTH - 20] + "\n…(truncated)"
     await fn_patch_check_run(
@@ -289,6 +290,6 @@ async def run_and_complete(
                 # todo: upload the full results as artifact
                 "text": f"```console\n{results or 'No results available'}\n```",
             },
-            "details_url": job_url,
+            "details_url": url_job or url_job_table,
         },
     )
