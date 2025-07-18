@@ -15,6 +15,7 @@ from lightning_sdk import Job, Machine, Status
 from py_bot.utils import generate_unique_hash
 
 LOCAL_ROOT_DIR = Path(__file__).parent
+PROJECT_ROOT_DIR = LOCAL_ROOT_DIR.parent
 LOCAL_TEMP_DIR = LOCAL_ROOT_DIR / ".temp"
 BASH_BOX_FUNC = textwrap.dedent("""\
   box() {
@@ -105,7 +106,7 @@ async def run_repo_job(
     with open(cmd_path, "w", encoding="utf_8") as fp:
         fp.write(config_run + os.linesep)
     assert os.path.isfile(cmd_path), "missing the created actions script"
-    await asyncio.sleep(5)  # todo: wait for the file to be written, likely Job sync issue
+    await asyncio.sleep(30)  # todo: wait for the file to be written, likely Job sync issue
     export_envs = "\n".join([f"export {k}={shlex.quote(str(v))}" for k, v in config_env.items()])
     # 1) List the commands you want to run inside the box
     cutoff_str = ("%" * 15) + f" CUT LOG {generate_unique_hash(32)} " + ("%" * 15)
@@ -115,7 +116,14 @@ async def run_repo_job(
     # 3) Build the full Docker‐run call using a heredoc
     with_gpus = "" if docker_run_machine.is_cpu() else "--gpus=all"
     job_cmd = (
-        "docker run --rm -i"
+        # early check that executable bash is available
+        f"if [ ! -e {repo_dir}/{docker_run_script} ]; then"
+        f" echo 'The script {docker_run_script} is not found in the repo {repo_dir}, exiting';"
+        f" rm -rf {PROJECT_ROOT_DIR}/.git; "  # todo: consider remove all .git folders
+        " python -m py_tree -s -d 4; exit 1; "  # depth 4 is to show top-level of the .temp/repo
+        "fi;"
+        # continue with the real docker run
+        " docker run --rm -i"
         f" -v {repo_dir}:/temp_repo"
         " -w /workspace"
         f" {with_gpus} {docker_run_image}"
@@ -134,7 +142,7 @@ async def run_repo_job(
         name=job_name,
         command=job_cmd,
         machine=docker_run_machine,
-        interruptible=config.get("interruptible", False),
+        interruptible=config.get("interruptible", True),  # fixme: loaded as string, convert to bool
     )
     return job, cutoff_str
 

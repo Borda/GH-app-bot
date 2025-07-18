@@ -2,10 +2,12 @@ import asyncio
 import datetime
 import logging
 import shutil
+from collections.abc import Callable
+from functools import partial
 from pathlib import Path
 from typing import Any
 
-from aiohttp import ClientSession
+from aiohttp import ClientSession, ClientTimeout, client_exceptions
 from gidgethub.aiohttp import GitHubAPI
 from lightning_sdk import Status, Teamspace
 from lightning_sdk.lightning_cloud.env import LIGHTNING_CLOUD_URL
@@ -16,6 +18,7 @@ from py_bot.utils import generate_matrix_from_config, is_triggered_by_event, loa
 JOB_QUEUE_TIMEOUT = 60 * 60  # 1 hour
 JOB_QUEUE_INTERVAL = 10  # 10 seconds
 STATUS_RUNNING_OR_FINISHED = {Status.Running, Status.Stopping, Status.Completed, Status.Stopped, Status.Failed}
+MAX_OUTPUT_LENGTH = 65525  # GitHub API limit for check-run output.text
 
 # async def on_pr_sync_simple(event, gh, *args: Any, **kwargs: Any) -> None:
 #     repo_owner = event.data["repository"]["owner"]["login"]
@@ -54,7 +57,20 @@ STATUS_RUNNING_OR_FINISHED = {Status.Running, Status.Stopping, Status.Completed,
 #     )
 
 
+async def post_with_retry(gh, url: str, data: dict, retries: int = 3, backoff: float = 1.0) -> Any:
+    """Post data to GitHub API with retries in case of connection issues."""
+    for it in range(1, retries + 1):
+        try:
+            return await gh.post(url, data=data)
+        except client_exceptions.ServerDisconnectedError:
+            if it == retries:
+                raise
+            await asyncio.sleep(backoff * it)
+    return None
+
+
 async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> None:
+    """Handle GitHub webhook events for code changes (push or pull_request)."""
     # figure out the commit SHA and branch ref
     if event.event == "push":
         head_sha = event.data["after"]
@@ -66,23 +82,28 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
     repo_name = event.data["repository"]["name"]
     this_teamspace = Teamspace()
     link_lightning_jobs = f"{LIGHTNING_CLOUD_URL}/{this_teamspace.owner.name}/{this_teamspace.name}/jobs/"
-    post_check = f"/repos/{repo_owner}/{repo_name}/check-runs"
+    # Create a partial function for posting check runs
+    post_check = partial(post_with_retry, gh=gh, url=f"/repos/{repo_owner}/{repo_name}/check-runs")
 
     # 1) Download the repository at the specified ref
     repo_dir = await download_repo_and_extract(
-        repo_owner=repo_owner, repo_name=repo_name, ref=head_sha, token=token, suffix=f"-event-{event.delivery_id}"
+        repo_owner=repo_owner, repo_name=repo_name, ref=head_sha, token=token, suffix=f"event-{event.delivery_id}"
     )
     if not repo_dir.is_dir():
         raise RuntimeError(f"Failed to download or extract repo {repo_owner}/{repo_name} at {head_sha}")
+    logging.info(f"Downloaded repo {repo_owner}/{repo_name} at {head_sha} to {repo_dir}")
 
     # 2) Read the config file
     repo_dir = Path(repo_dir).resolve()
     config_dir = repo_dir / ".lightning" / "workflows"
-    configs = load_configs_from_folder(config_dir)
+    configs, config_error = [], None
+    try:
+        configs = load_configs_from_folder(config_dir)
+    except Exception as ex:
+        config_error = ex
     if not configs:
         logging.warn(f"No valid configs found in {config_dir}")
-        await gh.post(
-            post_check,
+        await post_check(
             data={
                 "name": "Lit bot",
                 "head_sha": head_sha,
@@ -91,10 +112,14 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
                 "started_at": datetime.datetime.utcnow().isoformat() + "Z",
                 "output": {
                     "title": "No Configs Found",
-                    "summary": "No valid configuration files found in `.lightning/workflows`.",
+                    "summary": "No valid configuration files found in `.lightning/workflows` folder.",
+                    "text": f"```console\n{config_error!s}\n```"
+                    if config_error
+                    else "No specific error details available.",
                 },
             },
         )
+        logging.info(f"Early cleaning up the repo directory: {repo_dir}")
         shutil.rmtree(repo_dir, ignore_errors=True)
         return
 
@@ -105,8 +130,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
         if not is_triggered_by_event(event=event.event, branch=branch_ref, trigger=config.get("trigger")):
             if event.event in config.get("trigger", []):
                 # there is a trigger for this event, but it is not matched
-                await gh.post(
-                    post_check,
+                await post_check(
                     data={
                         "name": f"{cfg_file_name} / {cfg_name} [{event.event}]",
                         "head_sha": head_sha,
@@ -128,8 +152,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
             task_name = f"{cfg_file_name} / {name} ({', '.join([p or 'n/a' for p in params.values()])})"
             logging.debug(f"=> pull_request: synchronize -> {task_name=}")
             # Create a check run
-            check = await gh.post(
-                post_check,
+            check = await post_check(
                 data={
                     "name": task_name,
                     "head_sha": head_sha,
@@ -137,15 +160,19 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
                     "details_url": link_lightning_jobs,
                 },
             )
-            job_name = f"ci-run_{repo_owner}-{repo_name}-{head_sha}-{task_name.replace(' ', '_')}"
+            job_name = (
+                f"ci-run_{repo_owner}-{repo_name}-{head_sha[:7]}"
+                f"-event-{event.delivery_id.split('-')[0]}"
+                f"-{task_name.replace(' ', '_')}"
+            )
             post_check_id = f"/repos/{repo_owner}/{repo_name}/check-runs/{check['id']}"
+            patch_this_check_run = partial(patch_check_run, token=token, url=post_check_id)
 
             # detach with only the token, owner, repo, etc.
             tasks.append(
                 asyncio.create_task(
                     run_and_complete(
-                        token=token,
-                        post_check=post_check_id,
+                        fn_patch_check_run=patch_this_check_run,
                         job_name=job_name,
                         cfg_file_name=cfg_file_name,
                         config=config,
@@ -156,42 +183,48 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
             )
 
     # 3) Wait for all tasks to complete
+    logging.info(f"Waiting for {len(tasks)} tasks to complete...")
     await asyncio.gather(*tasks)
     # 4) Cleanup the repo directory
+    logging.info(f"Cleaning up the repo directory: {repo_dir}")
     shutil.rmtree(repo_dir, ignore_errors=True)
 
 
-# Decorator to inject ClientSession
-def with_aiohttp_session(func):
-    async def wrapper(*args, **kwargs):
-        async with ClientSession() as session:
-            return await func(*args, session=session, **kwargs)
+async def patch_check_run(token: str, url: str, data: dict, retries: int = 3, backoff: float = 1.0) -> Any:
+    """Patch a check run with retries in case of connection issues."""
+    timeout = ClientTimeout(total=60)  # allow up to 60 s to connect/send
+    async with ClientSession(timeout=timeout) as session:
+        gh_api = GitHubAPI(session, "pr-check-bot", oauth_token=token)
+        for it in range(1, retries + 1):  # up to 3 attempts
+            try:
+                return await gh_api.patch(url, data=data)
+            except (asyncio.TimeoutError, client_exceptions.ClientConnectorError):
+                if it == retries:
+                    raise
+                await asyncio.sleep(it * backoff)
+    return None
 
-    return wrapper
 
-
-@with_aiohttp_session
 async def run_and_complete(
-    token: str,
-    post_check: str,
+    fn_patch_check_run: Callable,
     job_name: str,
     cfg_file_name: str,
     config: dict,
     params: dict,
     repo_dir: str | Path,
-    session: ClientSession = None,
 ) -> None:
+    """Run a job and update the check run status."""
     debug_mode = config.get("mode", "info") == "debug"
-    # open its own session & GitHubAPI to patch the check-run
-    gh_api = GitHubAPI(session, "pr-check-bot", oauth_token=token)
     # define initial values
     this_teamspace = Teamspace()
     success = None  # Indicates whether the job succeeded, continue flow while it is None
     summary = ""  # Summary of the job's execution
     results = ""  # Full output of the job, if any
     job = None  # Placeholder for the job object
-    job_url = f"{LIGHTNING_CLOUD_URL}/{this_teamspace.owner.name}/{this_teamspace.name}/jobs/"  # Link to all jobs
+    url_job = ""  # URL to the job in Lightning Cloud
+    url_job_table = f"{LIGHTNING_CLOUD_URL}/{this_teamspace.owner.name}/{this_teamspace.name}/jobs/"  # Link to all jobs
     cutoff_str = ""  # String used for cutoff processing
+
     try:
         job, cutoff_str = await run_repo_job(
             cfg_file_name=cfg_file_name, config=config, params=params, repo_dir=repo_dir, job_name=job_name
@@ -202,17 +235,17 @@ async def run_and_complete(
             results = f"{ex!s}"
         else:
             logging.error(f"Failed to run job `{job_name}`: {ex!s}")
+
     if success is None:
-        job_url = job.link + "&job_detail_tab=logs"
-        await gh_api.patch(
-            post_check,
+        url_job = job.link + "&job_detail_tab=logs"
+        await fn_patch_check_run(
             data={
                 "status": "queued",
                 "output": {
                     "title": "Job is pending",
                     "summary": "Wait for machine availability",
                 },
-                "details_url": job_url,
+                "details_url": url_job or url_job_table,
             },
         )
         queue_start = asyncio.get_event_loop().time()
@@ -227,9 +260,9 @@ async def run_and_complete(
                 job.stop()
                 break
             await asyncio.sleep(JOB_QUEUE_INTERVAL)
+
     if success is None:
-        await gh_api.patch(
-            post_check,
+        await fn_patch_check_run(
             data={
                 "status": "in_progress",
                 "started_at": datetime.datetime.utcnow().isoformat() + "Z",
@@ -237,7 +270,7 @@ async def run_and_complete(
                     "title": "Job is running",
                     "summary": "Job is running on Lightning Cloud, please wait until it finishes.",
                 },
-                "details_url": job_url,
+                "details_url": url_job or url_job_table,
             },
         )
         try:
@@ -253,9 +286,10 @@ async def run_and_complete(
             else:
                 logging.error(f"Failed to run job `{job_name}`: {ex!s}")
 
-    logging.debug(f"job '{job_name}' finished with {success}")
-    await gh_api.patch(
-        post_check,
+    logging.info(f"Job finished with {success} >>> {url_job or (url_job_table + ' search for name ' + job_name)}")
+    if len(results) > MAX_OUTPUT_LENGTH:
+        results = results[: MAX_OUTPUT_LENGTH - 20] + "\n…(truncated)"
+    await fn_patch_check_run(
         data={
             "status": "completed",
             "completed_at": datetime.datetime.utcnow().isoformat() + "Z",
@@ -263,9 +297,9 @@ async def run_and_complete(
             "output": {
                 "title": "Job results",
                 "summary": summary,
-                # todo: consider improve parsing and formatting with MD
+                # todo: upload the full results as artifact
                 "text": f"```console\n{results or 'No results available'}\n```",
             },
-            "details_url": job_url,
+            "details_url": url_job or url_job_table,
         },
     )
