@@ -264,7 +264,7 @@ async def run_and_complete(
         url_job = job.link + "&job_detail_tab=logs"
         await fn_patch_check_run(
             data={
-                "status": str(job_status),
+                "status": job_status.value,
                 "output": {
                     "title": "Job is pending",
                     "summary": "Wait for machine availability",
@@ -287,7 +287,7 @@ async def run_and_complete(
     if job_status == GitHubJobStatus.IN_PROGRESS:
         await fn_patch_check_run(
             data={
-                "status": str(job_status),
+                "status": job_status.value,
                 "started_at": datetime.datetime.utcnow().isoformat() + "Z",
                 "output": {
                     "title": "Job is running",
@@ -327,9 +327,9 @@ async def run_and_complete(
         results = results[: MAX_OUTPUT_LENGTH - 20] + "\n…(truncated)"
     await fn_patch_check_run(
         data={
-            "status": str(job_status),
+            "status": job_status.value,
             "completed_at": datetime.datetime.utcnow().isoformat() + "Z",
-            "conclusion": str(job_conclusion),
+            "conclusion": job_conclusion.value,
             "output": {
                 "title": "Job results",
                 "summary": summary,
