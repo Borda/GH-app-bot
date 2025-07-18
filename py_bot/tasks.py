@@ -15,6 +15,7 @@ from lightning_sdk import Job, Machine, Status
 from py_bot.utils import generate_unique_hash
 
 LOCAL_ROOT_DIR = Path(__file__).parent
+PROJECT_ROOT_DIR = LOCAL_ROOT_DIR.parent
 LOCAL_TEMP_DIR = LOCAL_ROOT_DIR / ".temp"
 BASH_BOX_FUNC = textwrap.dedent("""\
   box() {
@@ -117,6 +118,7 @@ async def run_repo_job(
     job_cmd = (
         # early check that executable bash is available
         f"if [ ! -e {repo_dir}/{docker_run_script} ]; then"
+        f" rm -rf {PROJECT_ROOT_DIR}/.git; " # todo: consider remove all .git folders
         " python -m py_tree -s -d 4; exit 1; "  # depth 4 is to show top-level of the .temp/repo
         "fi;"
         # continue with the real docker run
