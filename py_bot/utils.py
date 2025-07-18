@@ -152,3 +152,54 @@ def is_triggered_by_event(event: str, branch: str, trigger: dict | list | None =
         # Check if the branch is in the list of branches
         return any(ob == branch for ob in branches)  # todo: update it to reqex
     return True  # if the event is fine but no branch specified
+
+
+def to_bool(value) -> bool:
+    """Convert various boolean indicators to a Python bool.
+
+    Supports:
+    - bool: returned as is
+    - int: 1 (True) or 0 (False)
+    - str: case-insensitive 'true', 'false', '1', '0', 'yes', 'no', 'on', 'off'
+
+    >>> to_bool(True)
+    True
+    >>> to_bool('true')
+    True
+    >>> to_bool('FALSE')
+    False
+    >>> to_bool(1)
+    True
+    >>> to_bool(0)
+    False
+    >>> to_bool('yes')
+    True
+    >>> to_bool('No')
+    False
+    >>> to_bool('invalid')
+    Traceback (most recent call last):
+      ...
+    ValueError: Unrecognized boolean value: 'invalid'
+    """
+    if value is None:
+        return False
+
+    if isinstance(value, bool):
+        return value
+
+    if isinstance(value, int):
+        if value in (0, 1):
+            return bool(value)
+        raise ValueError(f"Unrecognized boolean int: {value}")
+
+    if isinstance(value, str):
+        val = value.strip().lower()
+        truthy = {"true", "1", "yes", "y", "on"}
+        falsy = {"false", "0", "no", "n", "off"}
+        if val in truthy:
+            return True
+        if val in falsy:
+            return False
+        raise ValueError(f"Unrecognized boolean value: {value!r}")
+
+    raise ValueError(f"Type {type(value).__name__} is not supported for boolean conversion")

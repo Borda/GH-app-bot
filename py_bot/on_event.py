@@ -3,6 +3,7 @@ import datetime
 import logging
 import shutil
 from collections.abc import Callable
+from enum import Enum
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,27 @@ JOB_QUEUE_TIMEOUT = 60 * 60  # 1 hour
 JOB_QUEUE_INTERVAL = 10  # 10 seconds
 STATUS_RUNNING_OR_FINISHED = {Status.Running, Status.Stopping, Status.Completed, Status.Stopped, Status.Failed}
 MAX_OUTPUT_LENGTH = 65525  # GitHub API limit for check-run output.text
+
+
+class GitHubJobStatus(Enum):
+    """Enum for GitHub check run statuses."""
+
+    QUEUED = "queued"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+
+
+class GitHubJobConclusion(Enum):
+    """Enum for GitHub check run conclusions."""
+
+    SUCCESS = "success"
+    FAILURE = "failure"
+    SKIPPED = "skipped"
+    NEUTRAL = "neutral"
+    CANCELLED = "cancelled"
+    TIMED_OUT = "timed_out"
+    ACTION_REQUIRED = "action_required"
+
 
 # async def on_pr_sync_simple(event, gh, *args: Any, **kwargs: Any) -> None:
 #     repo_owner = event.data["repository"]["owner"]["login"]
@@ -217,10 +239,11 @@ async def run_and_complete(
     debug_mode = config.get("mode", "info") == "debug"
     # define initial values
     this_teamspace = Teamspace()
-    success = None  # Indicates whether the job succeeded, continue flow while it is None
     summary = ""  # Summary of the job's execution
     results = ""  # Full output of the job, if any
     job = None  # Placeholder for the job object
+    job_status = GitHubJobStatus.QUEUED
+    job_conclusion = GitHubJobConclusion.NEUTRAL
     url_job = ""  # URL to the job in Lightning Cloud
     url_job_table = f"{LIGHTNING_CLOUD_URL}/{this_teamspace.owner.name}/{this_teamspace.name}/jobs/"  # Link to all jobs
     cutoff_str = ""  # String used for cutoff processing
@@ -230,17 +253,18 @@ async def run_and_complete(
             cfg_file_name=cfg_file_name, config=config, params=params, repo_dir=repo_dir, job_name=job_name
         )
     except Exception as ex:
-        success, summary = False, f"Job `{job_name}` failed."
+        job_status, job_conclusion = GitHubJobStatus.COMPLETED, GitHubJobConclusion.FAILURE
+        summary = f"Job `{job_name}` failed."
         if debug_mode:
             results = f"{ex!s}"
         else:
             logging.error(f"Failed to run job `{job_name}`: {ex!s}")
 
-    if success is None:
+    if job_status == GitHubJobStatus.QUEUED:
         url_job = job.link + "&job_detail_tab=logs"
         await fn_patch_check_run(
             data={
-                "status": "queued",
+                "status": str(job_status),
                 "output": {
                     "title": "Job is pending",
                     "summary": "Wait for machine availability",
@@ -253,18 +277,17 @@ async def run_and_complete(
             if job.status in STATUS_RUNNING_OR_FINISHED:
                 break
             if asyncio.get_event_loop().time() - queue_start > JOB_QUEUE_TIMEOUT:
-                success, summary = (
-                    False,
-                    f"Job `{job_name}` didn't start within the provided ({JOB_QUEUE_TIMEOUT}) timeout.",
-                )
+                job_status, job_conclusion = GitHubJobStatus.COMPLETED, GitHubJobConclusion.TIMED_OUT
+                summary = f"Job `{job_name}` didn't start within the provided ({JOB_QUEUE_TIMEOUT}) timeout."
                 job.stop()
                 break
             await asyncio.sleep(JOB_QUEUE_INTERVAL)
+        job_status = GitHubJobStatus.IN_PROGRESS
 
-    if success is None:
+    if job_status == GitHubJobStatus.IN_PROGRESS:
         await fn_patch_check_run(
             data={
-                "status": "in_progress",
+                "status": str(job_status),
                 "started_at": datetime.datetime.utcnow().isoformat() + "Z",
                 "output": {
                     "title": "Job is running",
@@ -276,24 +299,37 @@ async def run_and_complete(
         try:
             timeout_minutes = float(config.get("timeout", 60))  # the default timeout is 60 minutes
             await job.async_wait(timeout=timeout_minutes * 60)  # wait for the job to finish
-            success, results = finalize_job(job, cutoff_str, debug=debug_mode)
-            summary = f"Job `{job_name}` finished with {success}"
-        except Exception as ex:  # most likely TimeoutError
-            job.stop()  # todo: drop it when waiting will have arg `stop_on_timeout=True`
-            success, summary = False, f"Job `{job_name}` failed"
+            raw_status, results = finalize_job(job, cutoff_str, debug=debug_mode)
+            job_status = GitHubJobStatus.COMPLETED
+            job_conclusion = (
+                GitHubJobConclusion.SUCCESS if raw_status == Status.Completed else GitHubJobConclusion.FAILURE
+            )
+            summary = f"Job `{job_name}` finished as {raw_status}"
+        except (TimeoutError, asyncio.TimeoutError):
+            job_status, job_conclusion = GitHubJobStatus.COMPLETED, GitHubJobConclusion.CANCELLED
+            summary = f"Job `{job_name}` cancelled due to timeout after {timeout_minutes} minutes."
+            if debug_mode:
+                results = "Job timed out, no results available."
+            else:
+                logging.warning(f"Job `{job_name}` timed out after {timeout_minutes} minutes")
+        except Exception as ex:
+            job_status, job_conclusion = GitHubJobStatus.COMPLETED, GitHubJobConclusion.FAILURE
             if debug_mode:
                 results = f"{ex!s}"
             else:
                 logging.error(f"Failed to run job `{job_name}`: {ex!s}")
+        job.stop()  # todo: drop it when waiting will have arg `stop_on_timeout=True`
 
-    logging.info(f"Job finished with {success} >>> {url_job or (url_job_table + ' search for name ' + job_name)}")
+    logging.info(
+        f"Job finished with {job_conclusion} >>> {url_job or (url_job_table + ' search for name ' + job_name)}"
+    )
     if len(results) > MAX_OUTPUT_LENGTH:
         results = results[: MAX_OUTPUT_LENGTH - 20] + "\n…(truncated)"
     await fn_patch_check_run(
         data={
-            "status": "completed",
+            "status": str(job_status),
             "completed_at": datetime.datetime.utcnow().isoformat() + "Z",
-            "conclusion": "success" if success else "failure",
+            "conclusion": str(job_conclusion),
             "output": {
                 "title": "Job results",
                 "summary": summary,
