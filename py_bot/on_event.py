@@ -91,6 +91,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
     )
     if not repo_dir.is_dir():
         raise RuntimeError(f"Failed to download or extract repo {repo_owner}/{repo_name} at {head_sha}")
+    logging.info(f"Downloaded repo {repo_owner}/{repo_name} at {head_sha} to {repo_dir}")
 
     # 2) Read the config file
     repo_dir = Path(repo_dir).resolve()

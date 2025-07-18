@@ -63,7 +63,7 @@ async def download_repo_and_extract(repo_owner: str, repo_name: str, ref: str, t
     async with aiohttp.ClientSession() as session, session.get(url, headers=headers) as resp:
         resp.raise_for_status()
         archive_data = await resp.read()
-    logging.info(f"Pull repo from {url}")
+    logging.debug(f"Pull repo from {url}")
 
     # 2) Extract zip into a temp directory
     tempdir = LOCAL_TEMP_DIR.resolve()
