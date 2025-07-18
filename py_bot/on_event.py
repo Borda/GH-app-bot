@@ -112,7 +112,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
                 "output": {
                     "title": "No Configs Found",
                     "summary": "No valid configuration files found in `.lightning/workflows` folder.",
-                    "text": f"```console\n{config_error!s}\n```",
+                    "text": f"```console\n{config_error!s}\n```" if config_error else "No specific error details available.",
                 },
             },
         )
