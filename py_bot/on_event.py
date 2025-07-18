@@ -125,6 +125,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
         config_error = ex
     if not configs:
         logging.warn(f"No valid configs found in {config_dir}")
+        text_error = f"```console\n{config_error!s}\n```" if config_error else "No specific error details available."
         await post_check(
             data={
                 "name": "Lit bot",
@@ -135,9 +136,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
                 "output": {
                     "title": "No Configs Found",
                     "summary": "No valid configuration files found in `.lightning/workflows` folder.",
-                    "text": f"```console\n{config_error!s}\n```"
-                    if config_error
-                    else "No specific error details available.",
+                    "text": text_error,
                 },
             },
         )
@@ -175,12 +174,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
             logging.debug(f"=> pull_request: synchronize -> {task_name=}")
             # Create a check run
             check = await post_check(
-                data={
-                    "name": task_name,
-                    "head_sha": head_sha,
-                    "status": "queued",
-                    "details_url": link_lightning_jobs,
-                },
+                data={"name": task_name, "head_sha": head_sha, "status": "queued", "details_url": link_lightning_jobs},
             )
             job_name = (
                 f"ci-run_{repo_owner}-{repo_name}-{head_sha[:7]}"

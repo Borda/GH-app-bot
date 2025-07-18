@@ -56,10 +56,7 @@ async def download_repo_and_extract(repo_owner: str, repo_name: str, ref: str, t
     """Download a GitHub repository at a specific ref (branch, tag, commit) and extract it to a temp directory."""
     # 1) Fetch zipball archive
     url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/zipball/{ref}"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/vnd.github+json",
-    }
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
     async with aiohttp.ClientSession() as session, session.get(url, headers=headers) as resp:
         resp.raise_for_status()
         archive_data = await resp.read()
@@ -98,7 +95,8 @@ async def run_repo_job(
     docker_run_image = params.get("image") or config.get("image", "ubuntu:22.04")
     config_env = config.get("env", {})
     config_env.update(params)  # add params to env
-    # print(f"CMD: {cmd_run}")
+
+    # check if the repo_dir is a valid path
     docker_run_script = f".lightning_workflow_{cfg_file_name.split('.')[0]}-{generate_unique_hash(params=params)}.sh"
     cmd_path = os.path.join(repo_dir, docker_run_script)
     assert not os.path.isfile(cmd_path), "the expected actions script already exists"
@@ -106,13 +104,18 @@ async def run_repo_job(
     with open(cmd_path, "w", encoding="utf_8") as fp:
         fp.write(config_run + os.linesep)
     assert os.path.isfile(cmd_path), "missing the created actions script"
-    await asyncio.sleep(30)  # todo: wait for the file to be written, likely Job sync issue
+    await asyncio.sleep(60)  # todo: wait for the file to be written, likely Job sync issue
+
+    # prepare the environment variables to export
     export_envs = "\n".join([f"export {k}={shlex.quote(str(v))}" for k, v in config_env.items()])
+
     # 1) List the commands you want to run inside the box
     cutoff_str = ("%" * 15) + f" CUT LOG {generate_unique_hash(32)} " + ("%" * 15)
     debug_cmds = ["printenv", "cp -r /temp_repo/. /workspace/", "ls -lah", f"cat {docker_run_script}"]
+
     # 2) Prefix each with `box "<cmd>"`
     boxed_cmds = "\n".join(f'box "{cmd}"' for cmd in debug_cmds)
+
     # 3) Build the full Docker‐run call using a heredoc
     with_gpus = "" if docker_run_machine.is_cpu() else "--gpus=all"
     job_cmd = (
@@ -137,6 +140,7 @@ async def run_repo_job(
         "EOF"
     )
     logging.debug(f"job >> {job_cmd}")
+
     # 4) Run the job with the Job.run() method
     job = Job.run(
         name=job_name,
