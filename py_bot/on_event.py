@@ -304,7 +304,7 @@ async def run_and_complete(
                 GitHubRunConclusion.SUCCESS if job_status == Status.Completed else GitHubRunConclusion.FAILURE
             )
             summary = f"Job `{job_name}` finished as {job_status}"
-        except (TimeoutError, asyncio.TimeoutError):
+        except TimeoutError:
             job.stop()  # todo: drop it when waiting will have arg `stop_on_timeout=True`
             run_status, run_conclusion = GitHubRunStatus.COMPLETED, GitHubRunConclusion.CANCELLED
             summary = f"Job `{job_name}` cancelled due to timeout after {timeout_minutes} minutes."
@@ -314,6 +314,7 @@ async def run_and_complete(
                 logging.warning(f"Job `{job_name}` timed out after {timeout_minutes} minutes")
         except Exception as ex:
             run_status, run_conclusion = GitHubRunStatus.COMPLETED, GitHubRunConclusion.FAILURE
+            summary = f"Job `{job_name}` failed due to an unexpected error: {ex!s}"
             if debug_mode:
                 results = f"{ex!s}"
             else:
