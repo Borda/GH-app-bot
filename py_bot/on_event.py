@@ -22,7 +22,7 @@ STATUS_RUNNING_OR_FINISHED = {Status.Running, Status.Stopping, Status.Completed,
 MAX_OUTPUT_LENGTH = 65525  # GitHub API limit for check-run output.text
 
 
-class GitHubJobStatus(Enum):
+class GitHubRunStatus(Enum):
     """Enum for GitHub check run statuses."""
 
     QUEUED = "queued"
@@ -30,7 +30,7 @@ class GitHubJobStatus(Enum):
     COMPLETED = "completed"
 
 
-class GitHubJobConclusion(Enum):
+class GitHubRunConclusion(Enum):
     """Enum for GitHub check run conclusions."""
 
     SUCCESS = "success"
@@ -242,8 +242,8 @@ async def run_and_complete(
     summary = ""  # Summary of the job's execution
     results = ""  # Full output of the job, if any
     job = None  # Placeholder for the job object
-    job_status = GitHubJobStatus.QUEUED
-    job_conclusion = GitHubJobConclusion.NEUTRAL
+    run_status = GitHubRunStatus.QUEUED
+    run_conclusion = GitHubRunConclusion.NEUTRAL
     url_job = ""  # URL to the job in Lightning Cloud
     url_job_table = f"{LIGHTNING_CLOUD_URL}/{this_teamspace.owner.name}/{this_teamspace.name}/jobs/"  # Link to all jobs
     cutoff_str = ""  # String used for cutoff processing
@@ -253,18 +253,18 @@ async def run_and_complete(
             cfg_file_name=cfg_file_name, config=config, params=params, repo_dir=repo_dir, job_name=job_name
         )
     except Exception as ex:
-        job_status, job_conclusion = GitHubJobStatus.COMPLETED, GitHubJobConclusion.FAILURE
+        run_status, run_conclusion = GitHubRunStatus.COMPLETED, GitHubRunConclusion.FAILURE
         summary = f"Job `{job_name}` failed."
         if debug_mode:
             results = f"{ex!s}"
         else:
             logging.error(f"Failed to run job `{job_name}`: {ex!s}")
 
-    if job_status == GitHubJobStatus.QUEUED:
+    if run_status == GitHubRunStatus.QUEUED:
         url_job = job.link + "&job_detail_tab=logs"
         await fn_patch_check_run(
             data={
-                "status": job_status.value,
+                "status": run_status.value,
                 "output": {
                     "title": "Job is pending",
                     "summary": "Wait for machine availability",
@@ -277,17 +277,17 @@ async def run_and_complete(
             if job.status in STATUS_RUNNING_OR_FINISHED:
                 break
             if asyncio.get_event_loop().time() - queue_start > JOB_QUEUE_TIMEOUT:
-                job_status, job_conclusion = GitHubJobStatus.COMPLETED, GitHubJobConclusion.TIMED_OUT
+                run_status, run_conclusion = GitHubRunStatus.COMPLETED, GitHubRunConclusion.TIMED_OUT
                 summary = f"Job `{job_name}` didn't start within the provided ({JOB_QUEUE_TIMEOUT}) timeout."
                 job.stop()
                 break
             await asyncio.sleep(JOB_QUEUE_INTERVAL)
-        job_status = GitHubJobStatus.IN_PROGRESS
+        run_status = GitHubRunStatus.IN_PROGRESS
 
-    if job_status == GitHubJobStatus.IN_PROGRESS:
+    if run_status == GitHubRunStatus.IN_PROGRESS:
         await fn_patch_check_run(
             data={
-                "status": job_status.value,
+                "status": run_status.value,
                 "started_at": datetime.datetime.utcnow().isoformat() + "Z",
                 "output": {
                     "title": "Job is running",
@@ -299,37 +299,37 @@ async def run_and_complete(
         try:
             timeout_minutes = float(config.get("timeout", 60))  # the default timeout is 60 minutes
             await job.async_wait(timeout=timeout_minutes * 60)  # wait for the job to finish
-            raw_status, results = finalize_job(job, cutoff_str, debug=debug_mode)
-            job_status = GitHubJobStatus.COMPLETED
-            job_conclusion = (
-                GitHubJobConclusion.SUCCESS if raw_status == Status.Completed else GitHubJobConclusion.FAILURE
+            job_status, results = finalize_job(job, cutoff_str, debug=debug_mode)
+            run_status = GitHubRunStatus.COMPLETED
+            run_conclusion = (
+                GitHubRunConclusion.SUCCESS if job_status == Status.Completed else GitHubRunConclusion.FAILURE
             )
-            summary = f"Job `{job_name}` finished as {raw_status}"
+            summary = f"Job `{job_name}` finished as {job_status}"
         except (TimeoutError, asyncio.TimeoutError):
-            job_status, job_conclusion = GitHubJobStatus.COMPLETED, GitHubJobConclusion.CANCELLED
+            job.stop()  # todo: drop it when waiting will have arg `stop_on_timeout=True`
+            run_status, run_conclusion = GitHubRunStatus.COMPLETED, GitHubRunConclusion.CANCELLED
             summary = f"Job `{job_name}` cancelled due to timeout after {timeout_minutes} minutes."
             if debug_mode:
                 results = "Job timed out, no results available."
             else:
                 logging.warning(f"Job `{job_name}` timed out after {timeout_minutes} minutes")
         except Exception as ex:
-            job_status, job_conclusion = GitHubJobStatus.COMPLETED, GitHubJobConclusion.FAILURE
+            run_status, run_conclusion = GitHubRunStatus.COMPLETED, GitHubRunConclusion.FAILURE
             if debug_mode:
                 results = f"{ex!s}"
             else:
                 logging.error(f"Failed to run job `{job_name}`: {ex!s}")
-        job.stop()  # todo: drop it when waiting will have arg `stop_on_timeout=True`
 
     logging.info(
-        f"Job finished with {job_conclusion} >>> {url_job or (url_job_table + ' search for name ' + job_name)}"
+        f"Job finished with {run_conclusion} >>> {url_job or (url_job_table + ' search for name ' + job_name)}"
     )
     if len(results) > MAX_OUTPUT_LENGTH:
         results = results[: MAX_OUTPUT_LENGTH - 20] + "\n…(truncated)"
     await fn_patch_check_run(
         data={
-            "status": job_status.value,
+            "status": run_status.value,
             "completed_at": datetime.datetime.utcnow().isoformat() + "Z",
-            "conclusion": job_conclusion.value,
+            "conclusion": run_conclusion.value,
             "output": {
                 "title": "Job results",
                 "summary": summary,
