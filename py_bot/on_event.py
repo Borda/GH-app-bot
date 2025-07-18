@@ -116,7 +116,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
                 },
             },
         )
-        logging.info(f"Cleaning up the repo directory: {repo_dir}")
+        logging.info(f"Early cleaning up the repo directory: {repo_dir}")
         shutil.rmtree(repo_dir, ignore_errors=True)
         return
 
@@ -157,7 +157,11 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
                     "details_url": link_lightning_jobs,
                 },
             )
-            job_name = f"ci-run_{repo_owner}-{repo_name}-{head_sha}-{task_name.replace(' ', '_')}"
+            job_name = (
+                f"ci-run_{repo_owner}-{repo_name}-{head_sha[:7]}"
+                f"-event-{event.delivery_id.split('-')[0]}"
+                f"-{task_name.replace(' ', '_')}"
+            )
             post_check_id = f"/repos/{repo_owner}/{repo_name}/check-runs/{check['id']}"
             patch_this_check_run = partial(patch_check_run, token=token, url=post_check_id)
 

@@ -119,7 +119,7 @@ async def run_repo_job(
         # early check that executable bash is available
         f"if [ ! -e {repo_dir}/{docker_run_script} ]; then"
         f" echo 'The script {docker_run_script} is not found in the repo {repo_dir}, exiting';"
-        f" rm -rf {PROJECT_ROOT_DIR}/.git; " # todo: consider remove all .git folders
+        f" rm -rf {PROJECT_ROOT_DIR}/.git; "  # todo: consider remove all .git folders
         " python -m py_tree -s -d 4; exit 1; "  # depth 4 is to show top-level of the .temp/repo
         "fi;"
         # continue with the real docker run
