@@ -21,15 +21,19 @@ The bot reads YAML workflow configuration files from the `.lightning/workflows/`
 
 ```yaml
 # .lightning/workflows/pr-checks.yml
+name: "PR Validation Workflow"  # Name of the workflow
 image: "python:3.11-slim-bookworm"
 machine: "CPU"  # can be overridden by the matrix
+interruptible: true  # uses spot instances for cost efficiency
+timeout: 60  # Timeout for each running (not queued) job in minutes
+mode: "debug"  # would share full logs
 
 env:
   HELLO: "world"
   TEST_ENV: "ci"
 
-trigger: # Define when the workflow should run, by default it runs on PRs and all pushes
-  push:
+trigger: # Define when the workflow should run, by default, it runs on PRs and all pushes
+  push:  # Trigger on pushes to the repository
     branches: ["main"]  # Trigger on pushes to these branches
   pull_request:  # Trigger on pull requests
     branches: ["main"]  # Only for PRs targeting the main branch
@@ -42,12 +46,9 @@ parametrize:
   exclude:
     - {"image": "python:3.10-slim-bookworm", "machine": "L4"}
 
-timeout: 60  # Timeout in minutes
-
-mode: "debug"  # would share full logs
 
 run: |
-  echo "Starting PR validation"
+  echo "Starting now..."
   pwd
   ls -lh
   echo "Environment: $HELLO"
