@@ -148,7 +148,8 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
     tasks = []
     for cfg_file_name, config in configs:
         cfg_name = config.get("name", "Lit Job")
-        if not is_triggered_by_event(event=event.event, branch=branch_ref, trigger=config.get("trigger")):
+        cfg_trigger = config.get("trigger", {})
+        if not is_triggered_by_event(event=event.event, branch=branch_ref, trigger=cfg_trigger):
             if event.event in config.get("trigger", []):
                 # there is a trigger for this event, but it is not matched
                 await post_check(
@@ -161,11 +162,15 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
                         "output": {
                             "title": "Skipped",
                             "summary": f"Configuration `{cfg_file_name}` is not triggered"
-                            f" by the event `{event.event}` on branch `{branch_ref}`.",
+                            f" by the event `{event.event}` on branch `{branch_ref}` (with {cfg_trigger}).",
                         },
                     },
                 )
             # skip this config if it is not triggered by the event
+            logging.info(
+                f"Skipping config {cfg_file_name} for event {event.event} on branch {branch_ref}"
+                f" because it is not triggered by this event with {cfg_trigger}."
+            )
             continue
         parameters = generate_matrix_from_config(config.get("parametrize", {}))
         for _, params in enumerate(parameters):
