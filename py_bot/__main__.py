@@ -31,6 +31,7 @@ if __name__ == "__main__":
     github_app_id, private_key, webhook_secret = _load_validate_required_env_vars()
     # Create router and register handlers
     router = routing.Router()
+    # todo: register also re-run event
     router.add(on_code_changed, event_type="pull_request", action="synchronize")
     router.add(on_code_changed, event_type="push")
 
