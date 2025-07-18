@@ -106,7 +106,7 @@ async def run_repo_job(
     with open(cmd_path, "w", encoding="utf_8") as fp:
         fp.write(config_run + os.linesep)
     assert os.path.isfile(cmd_path), "missing the created actions script"
-    await asyncio.sleep(5)  # todo: wait for the file to be written, likely Job sync issue
+    await asyncio.sleep(30)  # todo: wait for the file to be written, likely Job sync issue
     export_envs = "\n".join([f"export {k}={shlex.quote(str(v))}" for k, v in config_env.items()])
     # 1) List the commands you want to run inside the box
     cutoff_str = ("%" * 15) + f" CUT LOG {generate_unique_hash(32)} " + ("%" * 15)
@@ -142,7 +142,7 @@ async def run_repo_job(
         name=job_name,
         command=job_cmd,
         machine=docker_run_machine,
-        interruptible=config.get("interruptible", False),  # fixme: loaded as string, convert to bool
+        interruptible=config.get("interruptible", True),  # fixme: loaded as string, convert to bool
     )
     return job, cutoff_str
 
