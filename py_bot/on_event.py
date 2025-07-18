@@ -116,6 +116,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
                 },
             },
         )
+        logging.info(f"Cleaning up the repo directory: {repo_dir}")
         shutil.rmtree(repo_dir, ignore_errors=True)
         return
 
@@ -175,8 +176,10 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
             )
 
     # 3) Wait for all tasks to complete
+    logging.info(f"Waiting for {len(tasks)} tasks to complete...")
     await asyncio.gather(*tasks)
     # 4) Cleanup the repo directory
+    logging.info(f"Cleaning up the repo directory: {repo_dir}")
     shutil.rmtree(repo_dir, ignore_errors=True)
 
 
