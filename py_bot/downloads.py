@@ -109,4 +109,6 @@ async def cli_download_repo_and_extract() -> None:
 
 
 if __name__ == "__main__":
-    cli_download_repo_and_extract()
+    import asyncio
+
+    asyncio.run(cli_download_repo_and_extract())

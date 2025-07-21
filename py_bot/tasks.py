@@ -77,13 +77,16 @@ async def run_repo_job(cfg_file_name: str, config: dict, params: dict, token: st
     # 3) Build the full Docker‐run call using a heredoc
     with_gpus = "" if docker_run_machine.is_cpu() else "--gpus=all"
     job_cmd = (
+        # create a temp directory for the repo
         "mkdir -p temp_repo && "
+        "pip install -q py-tree && "
+        "python -m py_tree -s -d 3 && "
         # download the repo to temp_repo
         f"python GH-app-bot/py_bot/downloads.py && "
         "PATH_REPO_TEMP=$(realpath temp_repo) && "
         "ls -lah temp_repo/ && "
         # continue with the real docker run
-        " docker run --rm -i"
+        "docker run --rm -i"
         " -v ${PATH_REPO_TEMP}:/workspace"
         " -w /workspace"
         f" {with_gpus} {docker_run_image}"
