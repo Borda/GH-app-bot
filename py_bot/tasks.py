@@ -81,18 +81,17 @@ def extract_zip_archive(zip_path: Path, extract_to: Path, subfolder: str = "") -
     extract_to.mkdir(parents=True, exist_ok=True)
 
     with zipfile.ZipFile(zip_path, 'r') as zf:
+        first_path = zf.namelist()[0]  # e.g. "repo-owner-repo-sha1234abcd/"
+        root_folder = first_path.split("/", 1)[0]
         if subfolder:
-            subfolder_prefix = f"{subfolder}/"
             for file_info in zf.infolist():
-                if file_info.filename.startswith(subfolder_prefix):
-                    # Adjust the file path to remove the subfolder prefix
-                    file_info.filename = file_info.filename[len(subfolder_prefix):]
-                    if file_info.filename:  # Skip empty filenames (directories)
-                        zf.extract(file_info, extract_to)
+                fname = "/".join(file_info.filename.split('/')[1:])
+                if fname.startswith(f"{subfolder}/"):
+                    zf.extract(file_info, extract_to)
         else:
             zf.extractall(extract_to)
 
-    return extract_to
+    return (extract_to / root_folder).resolve()  # Return the path to the extracted repo folder
 
 
 async def download_repo_and_extract(repo_owner: str, repo_name: str, ref: str, token: str, folder_path: str | Path, suffix: str = "", subfolder: str = "") -> Path:
