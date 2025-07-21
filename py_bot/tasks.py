@@ -66,7 +66,7 @@ async def run_repo_job(cfg_file_name: str, config: dict, params: dict, token: st
         "printenv",
         "set -ex",
         # dump multi-lie the script to a file
-        # TODO
+        f'cat > {docker_run_script} << "SCRIPT_EOF"\n{config_run}\nSCRIPT_EOF',
         "ls -lah",
         f"cat {docker_run_script}",
     ]
