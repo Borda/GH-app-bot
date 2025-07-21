@@ -77,6 +77,7 @@ async def run_repo_job(cfg_file_name: str, config: dict, params: dict, token: st
     # 3) Build the full Docker‐run call using a heredoc
     with_gpus = "" if docker_run_machine.is_cpu() else "--gpus=all"
     job_cmd = (
+        "printenv && "
         # create a temp directory for the repo
         "mkdir -p temp_repo && "
         "pip install -q py-tree && "

@@ -85,10 +85,15 @@ async def cli_download_repo_and_extract() -> None:
     import tempfile
 
     repo_owner = os.getenv("GITHUB_REPOSITORY_OWNER")
+    assert repo_owner, "`GITHUB_REPOSITORY_OWNER` environment variable is not set"
     repo_name = os.getenv("GITHUB_REPOSITORY_NAME")
-    repo_ref = os.getenv("GITHUB_REPOSITORY_REF")
+    assert repo_name, "`GITHUB_REPOSITORY_NAME` environment variable is not set"
+    repo_ref = os.getenv("`GITHUB_REPOSITORY_REF")
+    assert repo_ref, "`GITHUB_REPOSITORY_REF` environment variable is not set"
     token = os.getenv("GITHUB_TOKEN")
+    assert token, "`GITHUB_TOKEN` environment variable is not set"
     path_workspace = os.getenv("PATH_WORKSPACE")
+    assert path_workspace, "`PATH_WORKSPACE` environment variable is not set"
 
     with tempfile.TemporaryDirectory() as temp_dir:
         folder_path = Path(temp_dir).resolve()
