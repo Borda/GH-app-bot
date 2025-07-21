@@ -182,7 +182,7 @@ async def run_repo_job(
         f"lightning download file {local_repo_archive} {lit_download_args} && "
         f"lightning download file {local_bash_script} {lit_download_args} && "
         "PATH_REPO_TEMP=$(realpath temp_repo) && "
-        f"ls -lah temp_repo/ && "
+        "ls -lah temp_repo/ && "
         # continue with the real docker run
         " docker run --rm -i"
         " -v ${PATH_REPO_TEMP}:/temp_repo"
