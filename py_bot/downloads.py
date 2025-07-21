@@ -88,7 +88,7 @@ async def cli_download_repo_and_extract() -> None:
     assert repo_owner, "`GITHUB_REPOSITORY_OWNER` environment variable is not set"
     repo_name = os.getenv("GITHUB_REPOSITORY_NAME")
     assert repo_name, "`GITHUB_REPOSITORY_NAME` environment variable is not set"
-    repo_ref = os.getenv("`GITHUB_REPOSITORY_REF")
+    repo_ref = os.getenv("GITHUB_REPOSITORY_REF")
     assert repo_ref, "`GITHUB_REPOSITORY_REF` environment variable is not set"
     token = os.getenv("GITHUB_TOKEN")
     assert token, "`GITHUB_TOKEN` environment variable is not set"
