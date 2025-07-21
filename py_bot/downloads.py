@@ -93,8 +93,8 @@ async def cli_download_repo_and_extract() -> None:
     assert repo_ref, "`GITHUB_REPOSITORY_REF` environment variable is not set"
     token = os.getenv("GITHUB_TOKEN")
     assert token, "`GITHUB_TOKEN` environment variable is not set"
-    path_workspace = os.getenv("PATH_WORKSPACE")
-    assert path_workspace, "`PATH_WORKSPACE` environment variable is not set"
+    path_folder = os.getenv("PATH_REPO_FOLDER")
+    assert path_folder, "`PATH_REPO_FOLDER` environment variable is not set"
 
     temp_dir = Path(tempfile.gettempdir()).resolve()
     # Download and extract the repository
@@ -108,8 +108,9 @@ async def cli_download_repo_and_extract() -> None:
     )
     print(f"Repository downloaded and extracted to {repo_path}")
     # move the extracted folder to the workspace
-    repo_path.rename(path_workspace)
-    print(f"Moved repository to {path_workspace}")
+    for sub_dir in repo_path.iterdir():
+        shutil.move(str(sub_dir), path_folder)
+    print(f"Moved repository to {path_folder}")
 
 
 if __name__ == "__main__":
