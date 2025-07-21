@@ -66,9 +66,9 @@ async def run_repo_job(cfg_file_name: str, config: dict, params: dict, token: st
         "printenv",
         "set -ex",
         # dump multi-lie the script to a file
-        f'cat > {docker_run_script} << "SCRIPT_EOF"\n{config_run}\nSCRIPT_EOF',
+        #f'cat > {docker_run_script} << "SCRIPT_EOF"\n{config_run}\nSCRIPT_EOF',
         "ls -lah",
-        f"cat {docker_run_script}",
+        #f"cat {docker_run_script}",
     ]
 
     # 2) Prefix each with `box "<cmd>"`
@@ -97,7 +97,7 @@ async def run_repo_job(cfg_file_name: str, config: dict, params: dict, token: st
         f"{BASH_BOX_FUNC}\n"
         f"{boxed_cmds}\n"
         f'echo "{cutoff_str}"\n'
-        f"bash {docker_run_script}\n"
+        f"{config_run}\n"
         "EOF"
     )
     logging.debug(f"job >> {job_cmd}")
