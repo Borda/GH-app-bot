@@ -63,6 +63,8 @@ async def download_repo_and_extract(
             for file_info in zf.infolist():
                 # Remove the first path component (e.g., the root folder) from the file path
                 fname = Path(*Path(file_info.filename).parts[1:])
+                if not fname.parts:  # Skip if fname is empty
+                    continue
                 if fname.as_posix().startswith(f"{subfolder}/"):
                     zf.extract(file_info, folder_path)
         else:  # Extract everything
@@ -73,7 +75,7 @@ async def download_repo_and_extract(
     if suffix:
         new_path_repo = folder_path / f"{root_folder}-{suffix}"
         if new_path_repo.exists():
-            raise IsADirectoryError(f"Path {new_path_repo} already exists, cannot rename {path_repo}")
+            raise FileExistsError(f"Path {new_path_repo} already exists, cannot rename {path_repo}")
         path_repo.rename(new_path_repo)
         path_repo = new_path_repo
 
@@ -108,8 +110,16 @@ async def cli_download_repo_and_extract() -> None:
     )
     print(f"Repository downloaded and extracted to {repo_path}")
     # move the extracted folder to the workspace
+    # Ensure the destination folder exists
+    path_folder = Path(path_folder).resolve()
+    path_folder.mkdir(parents=True, exist_ok=True)
+
+    # Move each subdirectory or file, handling name conflicts
     for sub_dir in repo_path.iterdir():
-        shutil.move(str(sub_dir), path_folder)
+        destination = path_folder / sub_dir.name
+        if destination.exists():
+            raise FileExistsError(f"Destination {destination} already exists. Cannot move {sub_dir}.")
+        shutil.move(str(sub_dir), str(destination))
     print(f"Moved repository to {path_folder}")
 
 
