@@ -188,7 +188,6 @@ async def run_repo_job(
 
     # 4) Run the job with the Job.run() method
     job = Job.run(
-        image=docker_run_image,
         name=job_name,
         command=job_cmd,
         machine=docker_run_machine,
