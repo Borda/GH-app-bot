@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import aiohttp
-from lightning_sdk import Job, Machine, Status
+from lightning_sdk import Job, Machine, Status, Studio
 
 from py_bot.utils import generate_unique_hash, to_bool
 
@@ -109,7 +109,7 @@ async def download_repo_and_extract(repo_owner: str, repo_name: str, ref: str, t
 
 
 async def run_repo_job(
-    cfg_file_name: str, config: dict, params: dict, repo_dir: str | Path, job_name: str
+    cfg_file_name: str, config: dict, params: dict, repo_dir: str | Path, repo_archive: str | Path, job_name: str
 ) -> tuple[Job, str]:
     """Download the full repo at `ref` into a tempdir, look for config and execute the job."""
     # mandatory
@@ -120,6 +120,9 @@ async def run_repo_job(
     config_env = config.get("env", {})
     config_env.update(params)  # add params to env
 
+    this_studio = Studio()
+    this_teamspace = this_studio.teamspace
+
     # check if the repo_dir is a valid path
     docker_run_script = f".lightning_workflow_{cfg_file_name.split('.')[0]}-{generate_unique_hash(params=params)}.sh"
     cmd_path = os.path.join(repo_dir, docker_run_script)
@@ -128,7 +131,7 @@ async def run_repo_job(
     with open(cmd_path, "w", encoding="utf_8") as fp:
         fp.write(config_run + os.linesep)
     assert os.path.isfile(cmd_path), "missing the created actions script"
-    await asyncio.sleep(60)  # todo: wait for the file to be written, likely Job sync issue
+    #await asyncio.sleep(60)  # todo: wait for the file to be written, likely Job sync issue
 
     # prepare the environment variables to export
     export_envs = "\n".join([f"export {k}={shlex.quote(str(v))}" for k, v in config_env.items()])
@@ -142,17 +145,18 @@ async def run_repo_job(
 
     # 3) Build the full Docker‐run call using a heredoc
     with_gpus = "" if docker_run_machine.is_cpu() else "--gpus=all"
+    lit_download_args = f"--studio={this_studio.name} --teamspace={this_teamspace.owner}/{this_teamspace.name} --local-path=/temp_repo"
+    local_repo_archive = Path(repo_archive).relative_to("/teamspace/studios/this_studio/")
+    local_bash_script = Path(cmd_path).relative_to("/teamspace/studios/this_studio/")
     job_cmd = (
-        # early check that executable bash is available
-        f"if [ ! -e {repo_dir}/{docker_run_script} ]; then"
-        f" echo 'The script {docker_run_script} is not found in the repo {repo_dir}, exiting'; "
-        # f" rm -rf {PROJECT_ROOT_DIR}/.git; " # consider remove all .git folders
-        # " python -m py_tree -s -d 4; " # depth 4 is to show top-level of the .temp/repo
-        " exit 1; "
-        "fi;"
+        "mkdir -p /temp_repo && "
+        # download the repo archive to /temp_repo
+        f"lightning download file {local_repo_archive} {lit_download_args} && "
+        f"lightning download file {local_bash_script} {lit_download_args} && "
+        f"ls -lah /temp_repo && "
         # continue with the real docker run
         " docker run --rm -i"
-        f" -v {repo_dir}:/temp_repo"
+        f" -v /temp_repo:/temp_repo"
         " -w /workspace"
         f" {with_gpus} {docker_run_image}"
         # Define your box() helper as a Bash function
