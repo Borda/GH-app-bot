@@ -160,7 +160,7 @@ async def run_repo_job(
         f"unzip /temp_repo/{Path(repo_archive).name} -d /temp_repo/archive/",
         # "pip install py-tree",
         # "python -m py_tree -s -d 3 /temp_repo/archive",
-        "mv /temp_repo/archive/*/* /workspace/",
+        "mv /temp_repo/archive/*/* /temp_repo/archive/*/.* /workspace/",
         "ls -lah",
         f"cat {docker_run_script}",
     ]
