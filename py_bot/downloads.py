@@ -8,14 +8,14 @@ import aiohttp
 
 
 async def download_repo_archive(
-    repo_owner: str, repo_name: str, ref: str, token: str, folder_path: str | Path, suffix: str = ""
+    repo_owner: str, repo_name: str, git_ref: str, token: str, folder_path: str | Path, suffix: str = ""
 ) -> Path:
     """Download a GitHub repository archive at a specific ref (branch, tag, commit) and return the path."""
     # Fetch zipball archive
-    url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/zipball/{ref}"
+    url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/zipball/{git_ref}"
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
 
-    archive_name = f"{repo_owner}-{repo_name}-{ref}"
+    archive_name = f"{repo_owner}-{repo_name}-{git_ref}"
     if suffix:
         archive_name = f"{archive_name}-{suffix}"
     folder_path = Path(folder_path).resolve()
@@ -37,7 +37,7 @@ async def download_repo_archive(
 async def download_repo_and_extract(
     repo_owner: str,
     repo_name: str,
-    ref: str,
+    git_ref: str,
     token: str,
     folder_path: str | Path,
     subfolder: str = "",
@@ -45,7 +45,7 @@ async def download_repo_and_extract(
 ) -> Path:
     """Download a GitHub repository at a specific ref (branch, tag, commit) and extract it to a temp directory."""
     # 1) Fetch zipball archive
-    url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/zipball/{ref}"
+    url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/zipball/{git_ref}"
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
     async with aiohttp.ClientSession() as session, session.get(url, headers=headers) as resp:
         resp.raise_for_status()
@@ -102,7 +102,7 @@ async def cli_download_repo_and_extract() -> None:
     repo_path = await download_repo_and_extract(
         repo_owner=repo_owner,
         repo_name=repo_name,
-        ref=repo_ref,
+        git_ref=repo_ref,
         token=token,
         folder_path=temp_dir,
     )

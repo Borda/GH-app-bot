@@ -118,7 +118,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
     repo_dir = await download_repo_and_extract(
         repo_owner=repo_owner,
         repo_name=repo_name,
-        ref=head_sha,
+        git_ref=head_sha,
         token=token,
         folder_path=LOCAL_TEMP_DIR,
         # extract only the `.lightning` subfolder
