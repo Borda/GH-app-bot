@@ -112,7 +112,7 @@ async def run_repo_job(cfg_file_name: str, config: dict, params: dict, token: st
             "LIGHTNING_DEBUG": "1",
             "GITHUB_REPOSITORY_OWNER": config.get("repository_owner"),
             "GITHUB_REPOSITORY_NAME": config.get("repository_name"),
-            "GITHUB_REF": config.get("repository_ref"),
+            "GITHUB_REPOSITORY_REF": config.get("repository_ref"),
             "GITHUB_TOKEN": token,
             "PATH_WORKSPACE": "temp_repo",
         },
