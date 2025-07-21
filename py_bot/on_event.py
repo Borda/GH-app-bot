@@ -140,6 +140,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
     finally:
         logging.info(f"Cleaning up the repo directory: {repo_dir}")
         shutil.rmtree(repo_dir, ignore_errors=True)
+
     if not configs:
         logging.warn(f"No valid configs found in {config_dir}")
         text_error = f"```console\n{config_error!s}\n```" if config_error else "No specific error details available."
@@ -159,10 +160,10 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
         )
         return
 
-    # 2) Launch check runs for each job
+    # 3) Launch check runs for each job
     tasks = []
     for cfg_file_name, config in configs:
-        config = config.update({  # add some extra info to the config
+        config.update({  # add some extra info to the config
             "repository_owner": repo_owner,
             "repository_name": repo_name,
             "repository_ref": branch_ref,
@@ -223,7 +224,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
                 )
             )
 
-    # 3) Wait for all tasks to complete
+    # 4) Wait for all tasks to complete
     logging.info(f"Waiting for {len(tasks)} tasks to complete...")
     await asyncio.gather(*tasks)
     results = await asyncio.gather(*tasks)

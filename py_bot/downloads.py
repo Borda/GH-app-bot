@@ -92,10 +92,8 @@ async def cli_download_repo_and_extract() -> None:
 
     with tempfile.TemporaryDirectory() as temp_dir:
         folder_path = Path(temp_dir).resolve()
-        logging.debug(f"Using temporary folder: {folder_path}")
-
         # Download and extract the repository
-        logging.info(f"Downloading repository {repo_owner}/{repo_name} at ref {repo_ref}")
+        print(f"Downloading repository {repo_owner}/{repo_name} at ref {repo_ref}")
         repo_path = await download_repo_and_extract(
             repo_owner=repo_owner,
             repo_name=repo_name,
@@ -103,13 +101,12 @@ async def cli_download_repo_and_extract() -> None:
             token=token,
             folder_path=folder_path,
         )
-        logging.info(f"Repository downloaded and extracted to {repo_path}")
+        print(f"Repository downloaded and extracted to {repo_path}")
         # move the extracted folder to the workspace
         path_workspace = Path(path_workspace).resolve()
         repo_path.rename(path_workspace)
-        logging.info(f"Moved repository to {path_workspace}")
+        print(f"Moved repository to {path_workspace}")
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
     cli_download_repo_and_extract()
