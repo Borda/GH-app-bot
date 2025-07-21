@@ -96,22 +96,20 @@ async def cli_download_repo_and_extract() -> None:
     path_workspace = os.getenv("PATH_WORKSPACE")
     assert path_workspace, "`PATH_WORKSPACE` environment variable is not set"
 
-    with tempfile.TemporaryDirectory() as temp_dir:
-        folder_path = Path(temp_dir).resolve()
-        # Download and extract the repository
-        print(f"Downloading repository {repo_owner}/{repo_name} at ref {repo_ref}")
-        repo_path = await download_repo_and_extract(
-            repo_owner=repo_owner,
-            repo_name=repo_name,
-            ref=repo_ref,
-            token=token,
-            folder_path=folder_path,
-        )
-        print(f"Repository downloaded and extracted to {repo_path}")
-        # move the extracted folder to the workspace
-        path_workspace = Path(path_workspace).resolve()
-        shutil.move(str(repo_path), str(path_workspace))
-        print(f"Moved repository to {path_workspace}")
+    temp_dir = Path(tempfile.gettempdir()).resolve()
+    # Download and extract the repository
+    print(f"Downloading repository {repo_owner}/{repo_name} at ref {repo_ref}")
+    repo_path = await download_repo_and_extract(
+        repo_owner=repo_owner,
+        repo_name=repo_name,
+        ref=repo_ref,
+        token=token,
+        folder_path=temp_dir,
+    )
+    print(f"Repository downloaded and extracted to {repo_path}")
+    # move the extracted folder to the workspace
+    repo_path.rename(path_workspace)
+    print(f"Moved repository to {path_workspace}")
 
 
 if __name__ == "__main__":

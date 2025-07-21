@@ -80,8 +80,8 @@ async def run_repo_job(cfg_file_name: str, config: dict, params: dict, token: st
         "printenv && "
         # create a temp directory for the repo
         "mkdir -p temp_repo && "
-        "pip install -q py-tree && "
-        "python -m py_tree -s -d 3 && "
+        #"pip install -q py-tree && "
+        #"python -m py_tree -s -d 3 && "
         # download the repo to temp_repo
         f"python GH-app-bot/py_bot/downloads.py && "
         "PATH_REPO_TEMP=$(realpath temp_repo) && "
