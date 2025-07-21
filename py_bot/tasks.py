@@ -80,7 +80,7 @@ async def run_repo_job(cfg_file_name: str, config: dict, params: dict, token: st
         # "pip install -q py-tree && "
         # "python -m py_tree -s -d 3 && "
         # download the repo to temp_repo
-        f"python GH-app-bot/py_bot/downloads.py && "
+        "python GH-app-bot/py_bot/downloads.py && "
         "PATH_REPO_TEMP=$(realpath temp_repo) && "
         "ls -lah temp_repo/ && "
         # continue with the real docker run
