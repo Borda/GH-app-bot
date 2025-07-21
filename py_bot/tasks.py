@@ -1,5 +1,4 @@
 import asyncio
-import io
 import logging
 import os
 import re
@@ -48,7 +47,10 @@ async def run_sleeping_task(*args: Any, **kwargs: Any):
     await asyncio.sleep(60)
     return True
 
-async def download_repo_archive(repo_owner: str, repo_name: str, ref: str, token: str, folder_path: str | Path, suffix: str = "") -> Path:
+
+async def download_repo_archive(
+    repo_owner: str, repo_name: str, ref: str, token: str, folder_path: str | Path, suffix: str = ""
+) -> Path:
     """Download a GitHub repository archive at a specific ref (branch, tag, commit) and return the path."""
     # Fetch zipball archive
     url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/zipball/{ref}"
@@ -80,12 +82,12 @@ def extract_zip_archive(zip_path: Path, extract_to: Path, subfolder: str = "") -
 
     extract_to.mkdir(parents=True, exist_ok=True)
 
-    with zipfile.ZipFile(zip_path, 'r') as zf:
+    with zipfile.ZipFile(zip_path, "r") as zf:
         first_path = zf.namelist()[0]  # e.g. "repo-owner-repo-sha1234abcd/"
         root_folder = first_path.split("/", 1)[0]
         if subfolder:
             for file_info in zf.infolist():
-                fname = "/".join(file_info.filename.split('/')[1:])
+                fname = "/".join(file_info.filename.split("/")[1:])
                 if fname.startswith(f"{subfolder}/"):
                     zf.extract(file_info, extract_to)
         else:
@@ -94,18 +96,28 @@ def extract_zip_archive(zip_path: Path, extract_to: Path, subfolder: str = "") -
     return (extract_to / root_folder).resolve()  # Return the path to the extracted repo folder
 
 
-async def download_repo_and_extract(repo_owner: str, repo_name: str, ref: str, token: str, folder_path: str | Path, suffix: str = "", subfolder: str = "") -> Path:
+async def download_repo_and_extract(
+    repo_owner: str,
+    repo_name: str,
+    ref: str,
+    token: str,
+    folder_path: str | Path,
+    suffix: str = "",
+    subfolder: str = "",
+) -> Path:
     """Download a GitHub repository at a specific ref (branch, tag, commit) and extract it to a temp directory."""
     folder_path = Path(folder_path).resolve()
     folder_path.mkdir(parents=True, exist_ok=True)
 
     # 1) Download zipball archive
-    archive_path = await download_repo_archive(repo_owner=repo_owner, repo_name=repo_name, ref=ref, token=token, folder_path=folder_path, suffix=suffix)
+    archive_path = await download_repo_archive(
+        repo_owner=repo_owner, repo_name=repo_name, ref=ref, token=token, folder_path=folder_path, suffix=suffix
+    )
 
     # 2) Extract zip into a temp directory
     path_repo = extract_zip_archive(zip_path=archive_path, extract_to=folder_path, subfolder=subfolder)
 
-    return path_repo
+    return path_repo.resolve()
 
 
 async def run_repo_job(
@@ -131,7 +143,7 @@ async def run_repo_job(
     with open(cmd_path, "w", encoding="utf_8") as fp:
         fp.write(config_run + os.linesep)
     assert os.path.isfile(cmd_path), "missing the created actions script"
-    #await asyncio.sleep(60)  # todo: wait for the file to be written, likely Job sync issue
+    # await asyncio.sleep(60)  # todo: wait for the file to be written, likely Job sync issue
 
     # prepare the environment variables to export
     export_envs = "\n".join([f"export {k}={shlex.quote(str(v))}" for k, v in config_env.items()])
@@ -145,7 +157,11 @@ async def run_repo_job(
 
     # 3) Build the full Docker‐run call using a heredoc
     with_gpus = "" if docker_run_machine.is_cpu() else "--gpus=all"
-    lit_download_args = f"--studio={this_studio.name} --teamspace={this_teamspace.owner}/{this_teamspace.name} --local-path=/temp_repo"
+    lit_download_args = " ".join([
+        f"--studio={this_studio.name}",
+        f"--teamspace={this_teamspace.owner.name}/{this_teamspace.name}",
+        "--local-path=/temp_repo",
+    ])
     local_repo_archive = Path(repo_archive).relative_to("/teamspace/studios/this_studio/")
     local_bash_script = Path(cmd_path).relative_to("/teamspace/studios/this_studio/")
     job_cmd = (

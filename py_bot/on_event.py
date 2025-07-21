@@ -123,7 +123,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
     repo_dir = extract_zip_archive(
         zip_path=archive_path,
         extract_to=LOCAL_TEMP_DIR,
-        subfolder=".lightning"  # extract only `.lightning` subfolder
+        subfolder=".lightning",  # extract only `.lightning` subfolder
     )
     if not repo_dir.is_dir():
         raise RuntimeError(f"Failed to extract repo {repo_owner}/{repo_name} at {head_sha}")
@@ -213,7 +213,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
                         config=config,
                         params=params,
                         repo_dir=repo_dir,
-                    repo_archive=archive_path,
+                        repo_archive=archive_path,
                     )
                 )
             )
@@ -247,7 +247,8 @@ async def run_and_complete(
     cfg_file_name: str,
     config: dict,
     params: dict,
-    repo_dir: str | Path, repo_archive: str | Path
+    repo_dir: str | Path,
+    repo_archive: str | Path,
 ) -> None:
     """Run a job and update the check run status."""
     debug_mode = config.get("mode", "info") == "debug"
@@ -264,7 +265,12 @@ async def run_and_complete(
 
     try:
         job, cutoff_str = await run_repo_job(
-            cfg_file_name=cfg_file_name, config=config, params=params, repo_dir=repo_dir, repo_archive=repo_archive, job_name=job_name
+            cfg_file_name=cfg_file_name,
+            config=config,
+            params=params,
+            repo_dir=repo_dir,
+            repo_archive=repo_archive,
+            job_name=job_name,
         )
     except Exception as ex:
         run_status, run_conclusion = GitHubRunStatus.COMPLETED, GitHubRunConclusion.FAILURE

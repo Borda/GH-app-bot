@@ -1,0 +1,5 @@
+mkdir -p /temp_repo
+ lightning download file GH-app-bot/py_bot/.temp/Lightning-Sandbox-demo-with-Bots-c3dc30858deffa5fa75c2b27fcff6f4b1a784d5d-event-68fbadc0-661b-11f0-8c4c-b4b3dcc1a65a.zip --studio=gh-bot-python --teamspace=Organization(name=lightning-ai)/jirka --local-path=/temp_repo
+ lightning download file GH-app-bot/py_bot/.temp/Lightning-Sandbox-demo-with-Bots-c3dc30858deffa5fa75c2b27fcff6f4b1a784d5d/.lightning_workflow_actions-2fbe3e1f7a9e3ff7.sh --studio=gh-bot-python --teamspace=Organization(name=lightning-ai)/jirka --local-path=/temp_repo
+ ls -lah /temp_repo
+  docker
