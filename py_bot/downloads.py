@@ -82,6 +82,7 @@ async def download_repo_and_extract(
 
 async def cli_download_repo_and_extract() -> None:
     """CLI entry point to download and extract a GitHub repository."""
+    import shutil
     import tempfile
 
     repo_owner = os.getenv("GITHUB_REPOSITORY_OWNER")
@@ -109,7 +110,7 @@ async def cli_download_repo_and_extract() -> None:
         print(f"Repository downloaded and extracted to {repo_path}")
         # move the extracted folder to the workspace
         path_workspace = Path(path_workspace).resolve()
-        repo_path.rename(path_workspace)
+        shutil.move(str(repo_path), str(path_workspace))
         print(f"Moved repository to {path_workspace}")
 
 
