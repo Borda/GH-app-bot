@@ -14,9 +14,6 @@ from lightning_sdk import Job, Machine, Status
 
 from py_bot.utils import generate_unique_hash, to_bool
 
-LOCAL_ROOT_DIR = Path(__file__).parent
-PROJECT_ROOT_DIR = LOCAL_ROOT_DIR.parent
-LOCAL_TEMP_DIR = LOCAL_ROOT_DIR / ".temp"
 BASH_BOX_FUNC = textwrap.dedent("""\
   box() {
     local cmd="$1"
@@ -51,35 +48,63 @@ async def run_sleeping_task(*args: Any, **kwargs: Any):
     await asyncio.sleep(60)
     return True
 
-
-async def download_repo_and_extract(repo_owner: str, repo_name: str, ref: str, token: str, suffix: str = "") -> Path:
-    """Download a GitHub repository at a specific ref (branch, tag, commit) and extract it to a temp directory."""
-    # 1) Fetch zipball archive
+async def download_repo_archive(repo_owner: str, repo_name: str, ref: str, token: str, folder_path: str | Path, suffix: str = "") -> Path:
+    """Download a GitHub repository archive at a specific ref (branch, tag, commit) and return the path."""
+    # Fetch zipball archive
     url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/zipball/{ref}"
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
+
+    archive_name = f"{repo_owner}-{repo_name}-{ref}"
+    if suffix:
+        archive_name = f"{archive_name}-{suffix}"
+    folder_path = Path(folder_path).resolve()
+    folder_path.mkdir(parents=True, exist_ok=True)
+    archive_path = folder_path / f"{archive_name}.zip"
+
+    logging.debug(f"Pull repo from {url}")
     async with aiohttp.ClientSession() as session, session.get(url, headers=headers) as resp:
         resp.raise_for_status()
         archive_data = await resp.read()
-    logging.debug(f"Pull repo from {url}")
+
+    # Save archive to file
+    with open(archive_path, "wb") as f:
+        f.write(archive_data)
+
+    return archive_path
+
+
+def extract_zip_archive(zip_path: Path, extract_to: Path, subfolder: str = "") -> Path:
+    """Extract a zip archive to a specified directory, optionally filtering by subfolder."""
+    if not zip_path.is_file():
+        raise FileNotFoundError(f"Zip file {zip_path} does not exist.")
+
+    extract_to.mkdir(parents=True, exist_ok=True)
+
+    with zipfile.ZipFile(zip_path, 'r') as zf:
+        if subfolder:
+            subfolder_prefix = f"{subfolder}/"
+            for file_info in zf.infolist():
+                if file_info.filename.startswith(subfolder_prefix):
+                    # Adjust the file path to remove the subfolder prefix
+                    file_info.filename = file_info.filename[len(subfolder_prefix):]
+                    if file_info.filename:  # Skip empty filenames (directories)
+                        zf.extract(file_info, extract_to)
+        else:
+            zf.extractall(extract_to)
+
+    return extract_to
+
+
+async def download_repo_and_extract(repo_owner: str, repo_name: str, ref: str, token: str, folder_path: str | Path, suffix: str = "", subfolder: str = "") -> Path:
+    """Download a GitHub repository at a specific ref (branch, tag, commit) and extract it to a temp directory."""
+    folder_path = Path(folder_path).resolve()
+    folder_path.mkdir(parents=True, exist_ok=True)
+
+    # 1) Download zipball archive
+    archive_path = await download_repo_archive(repo_owner=repo_owner, repo_name=repo_name, ref=ref, token=token, folder_path=folder_path, suffix=suffix)
 
     # 2) Extract zip into a temp directory
-    tempdir = LOCAL_TEMP_DIR.resolve()
-    tempdir.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(io.BytesIO(archive_data)) as zf:
-        # 1) Grab the first entry in the archive’s name list
-        first_path = zf.namelist()[0]  # e.g. "repo-owner-repo-sha1234abcd/"
-        root_folder = first_path.split("/", 1)[0]
-        # 2) Extract everything
-        zf.extractall(tempdir)
-
-    # 3) rename the extracted folder if a suffix is provided
-    path_repo = tempdir / root_folder
-    if suffix:
-        new_path_repo = tempdir / f"{root_folder}-{suffix}"
-        if new_path_repo.exists():
-            raise IsADirectoryError(f"Path {new_path_repo} already exists, cannot rename {path_repo}")
-        path_repo.rename(new_path_repo)
-        path_repo = new_path_repo
+    path_repo = extract_zip_archive(zip_path=archive_path, extract_to=folder_path, subfolder=subfolder)
 
     return path_repo
 
@@ -144,6 +169,7 @@ async def run_repo_job(
 
     # 4) Run the job with the Job.run() method
     job = Job.run(
+        image=docker_run_image,
         name=job_name,
         command=job_cmd,
         machine=docker_run_machine,

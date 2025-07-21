@@ -13,13 +13,15 @@ from gidgethub.aiohttp import GitHubAPI
 from lightning_sdk import Status, Teamspace
 from lightning_sdk.lightning_cloud.env import LIGHTNING_CLOUD_URL
 
-from py_bot.tasks import download_repo_and_extract, finalize_job, run_repo_job
+from py_bot.tasks import download_repo_archive, extract_zip_archive, finalize_job, run_repo_job
 from py_bot.utils import generate_matrix_from_config, is_triggered_by_event, load_configs_from_folder
 
 JOB_QUEUE_TIMEOUT = 60 * 60  # 1 hour
 JOB_QUEUE_INTERVAL = 10  # 10 seconds
 STATUS_RUNNING_OR_FINISHED = {Status.Running, Status.Stopping, Status.Completed, Status.Stopped, Status.Failed}
 MAX_OUTPUT_LENGTH = 65525  # GitHub API limit for check-run output.text
+LOCAL_ROOT_DIR = Path(__file__).parent
+LOCAL_TEMP_DIR = LOCAL_ROOT_DIR / ".temp"
 
 
 class GitHubRunStatus(Enum):
@@ -108,11 +110,23 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
     post_check = partial(post_with_retry, gh=gh, url=f"/repos/{repo_owner}/{repo_name}/check-runs")
 
     # 1) Download the repository at the specified ref
-    repo_dir = await download_repo_and_extract(
-        repo_owner=repo_owner, repo_name=repo_name, ref=head_sha, token=token, suffix=f"event-{event.delivery_id}"
+    archive_path = await download_repo_archive(
+        repo_owner=repo_owner,
+        repo_name=repo_name,
+        ref=head_sha,
+        token=token,
+        folder_path=LOCAL_TEMP_DIR,
+        suffix=f"event-{event.delivery_id}",
+    )
+    if not archive_path.is_file():
+        raise RuntimeError(f"Failed to download repo {repo_owner}/{repo_name} at {head_sha}")
+    repo_dir = extract_zip_archive(
+        zip_path=archive_path,
+        extract_to=LOCAL_TEMP_DIR,
+        subfolder=".lightning"  # extract only `.lightning` subfolder
     )
     if not repo_dir.is_dir():
-        raise RuntimeError(f"Failed to download or extract repo {repo_owner}/{repo_name} at {head_sha}")
+        raise RuntimeError(f"Failed to extract repo {repo_owner}/{repo_name} at {head_sha}")
     logging.info(f"Downloaded repo {repo_owner}/{repo_name} at {head_sha} to {repo_dir}")
 
     # 2) Read the config file
