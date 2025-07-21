@@ -54,9 +54,6 @@ async def run_repo_job(cfg_file_name: str, config: dict, params: dict, token: st
     config_env = config.get("env", {})
     config_env.update(params)  # add params to env
 
-    # check if the repo_dir is a valid path
-    docker_run_script = f".lightning_workflow_{cfg_file_name.split('.')[0]}.sh"
-
     # prepare the environment variables to export
     export_envs = "\n".join([f"export {k}={shlex.quote(str(v))}" for k, v in config_env.items()])
 
@@ -66,9 +63,9 @@ async def run_repo_job(cfg_file_name: str, config: dict, params: dict, token: st
         "printenv",
         "set -ex",
         # dump multi-lie the script to a file
-        #f'cat > {docker_run_script} << "SCRIPT_EOF"\n{config_run}\nSCRIPT_EOF',
+        # f'cat > {docker_run_script} << "SCRIPT_EOF"\n{config_run}\nSCRIPT_EOF',
         "ls -lah",
-        #f"cat {docker_run_script}",
+        # f"cat {docker_run_script}",
     ]
 
     # 2) Prefix each with `box "<cmd>"`
@@ -77,11 +74,11 @@ async def run_repo_job(cfg_file_name: str, config: dict, params: dict, token: st
     # 3) Build the full Docker‐run call using a heredoc
     with_gpus = "" if docker_run_machine.is_cpu() else "--gpus=all"
     job_cmd = (
-        'box "printenv" && '
+        "printenv && "
         # create a temp directory for the repo
         "mkdir -p temp_repo && "
-        #"pip install -q py-tree && "
-        #"python -m py_tree -s -d 3 && "
+        # "pip install -q py-tree && "
+        # "python -m py_tree -s -d 3 && "
         # download the repo to temp_repo
         f"python GH-app-bot/py_bot/downloads.py && "
         "PATH_REPO_TEMP=$(realpath temp_repo) && "
