@@ -166,7 +166,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
         config.update({  # add some extra info to the config
             "repository_owner": repo_owner,
             "repository_name": repo_name,
-            "repository_ref": branch_ref,
+            "repository_ref": head_sha,
         })
         cfg_name = config.get("name", "Lit Job")
         cfg_trigger = config.get("trigger", {})
