@@ -1,15 +1,11 @@
 import asyncio
 import logging
-import os
 import re
 import shlex
 import textwrap
-import zipfile
-from pathlib import Path
 from typing import Any
 
-import aiohttp
-from lightning_sdk import Job, Machine, Status, Studio
+from lightning_sdk import Job, Machine, Status
 
 from py_bot.utils import generate_unique_hash, to_bool
 
@@ -48,82 +44,7 @@ async def run_sleeping_task(*args: Any, **kwargs: Any):
     return True
 
 
-async def download_repo_archive(
-    repo_owner: str, repo_name: str, ref: str, token: str, folder_path: str | Path, suffix: str = ""
-) -> Path:
-    """Download a GitHub repository archive at a specific ref (branch, tag, commit) and return the path."""
-    # Fetch zipball archive
-    url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/zipball/{ref}"
-    headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
-
-    archive_name = f"{repo_owner}-{repo_name}-{ref}"
-    if suffix:
-        archive_name = f"{archive_name}-{suffix}"
-    folder_path = Path(folder_path).resolve()
-    folder_path.mkdir(parents=True, exist_ok=True)
-    archive_path = folder_path / f"{archive_name}.zip"
-
-    logging.debug(f"Pull repo from {url}")
-    async with aiohttp.ClientSession() as session, session.get(url, headers=headers) as resp:
-        resp.raise_for_status()
-        archive_data = await resp.read()
-
-    # Save archive to file
-    with open(archive_path, "wb") as f:
-        f.write(archive_data)
-
-    return archive_path
-
-
-def extract_zip_archive(zip_path: Path, extract_to: Path, subfolder: str = "") -> Path:
-    """Extract a zip archive to a specified directory, optionally filtering by subfolder."""
-    if not zip_path.is_file():
-        raise FileNotFoundError(f"Zip file {zip_path} does not exist.")
-
-    extract_to.mkdir(parents=True, exist_ok=True)
-
-    with zipfile.ZipFile(zip_path, "r") as zf:
-        first_path = zf.namelist()[0]  # e.g. "repo-owner-repo-sha1234abcd/"
-        root_folder = first_path.split("/", 1)[0]
-        if subfolder:
-            for file_info in zf.infolist():
-                # Remove the first path component (e.g., the root folder) from the file path
-                fname = Path(*Path(file_info.filename).parts[1:])
-                if fname.as_posix().startswith(f"{subfolder}/"):
-                    zf.extract(file_info, extract_to)
-        else:
-            zf.extractall(extract_to)
-
-    return (extract_to / root_folder).resolve()  # Return the path to the extracted repo folder
-
-
-async def download_repo_and_extract(
-    repo_owner: str,
-    repo_name: str,
-    ref: str,
-    token: str,
-    folder_path: str | Path,
-    suffix: str = "",
-    subfolder: str = "",
-) -> Path:
-    """Download a GitHub repository at a specific ref (branch, tag, commit) and extract it to a temp directory."""
-    folder_path = Path(folder_path).resolve()
-    folder_path.mkdir(parents=True, exist_ok=True)
-
-    # 1) Download zipball archive
-    archive_path = await download_repo_archive(
-        repo_owner=repo_owner, repo_name=repo_name, ref=ref, token=token, folder_path=folder_path, suffix=suffix
-    )
-
-    # 2) Extract zip into a temp directory
-    path_repo = extract_zip_archive(zip_path=archive_path, extract_to=folder_path, subfolder=subfolder)
-
-    return path_repo.resolve()
-
-
-async def run_repo_job(
-    cfg_file_name: str, config: dict, params: dict, repo_dir: str | Path, repo_archive: str | Path, job_name: str
-) -> tuple[Job, str]:
+async def run_repo_job(cfg_file_name: str, config: dict, params: dict, token: str, job_name: str) -> tuple[Job, str]:
     """Download the full repo at `ref` into a tempdir, look for config and execute the job."""
     # mandatory
     config_run = config["run"]
@@ -133,61 +54,37 @@ async def run_repo_job(
     config_env = config.get("env", {})
     config_env.update(params)  # add params to env
 
-    this_studio = Studio()
-    this_teamspace = this_studio.teamspace
-
     # check if the repo_dir is a valid path
-    docker_run_script = f".lightning_workflow_{cfg_file_name.split('.')[0]}-{generate_unique_hash(params=params)}.sh"
-    cmd_path = os.path.join(repo_dir, docker_run_script)
-    assert not os.path.isfile(cmd_path), "the expected actions script already exists"
-    # dump the cmd to .lightning/actions.sh
-    with open(cmd_path, "w", encoding="utf_8") as fp:
-        fp.write(config_run + os.linesep)
-    assert os.path.isfile(cmd_path), "missing the created actions script"
-    # await asyncio.sleep(60)  # todo: wait for the file to be written, likely Job sync issue
+    docker_run_script = f".lightning_workflow_{cfg_file_name.split('.')[0]}.sh"
 
     # prepare the environment variables to export
     export_envs = "\n".join([f"export {k}={shlex.quote(str(v))}" for k, v in config_env.items()])
 
     # 1) List the commands you want to run inside the box
     cutoff_str = ("%" * 15) + f" CUT LOG {generate_unique_hash(32)} " + ("%" * 15)
-    debug_cmds = [
+    docker_debug_cmds = [
         "printenv",
         "set -ex",
-        "ls -lah /temp_repo",
-        f"cp -r /temp_repo/{docker_run_script} /workspace/",
-        "apt-get -q update && apt-get install -q -y unzip",
-        f"unzip /temp_repo/{Path(repo_archive).name} -d /temp_repo/archive/",
-        # "pip install py-tree",
-        # "python -m py_tree -s -d 3 /temp_repo/archive",
-        "mv /temp_repo/archive/*/* /temp_repo/archive/*/.* /workspace/",
+        # dump multi-lie the script to a file
+        # TODO
         "ls -lah",
         f"cat {docker_run_script}",
     ]
 
     # 2) Prefix each with `box "<cmd>"`
-    boxed_cmds = "\n".join(f'box "{cmd}"' for cmd in debug_cmds)
+    boxed_cmds = "\n".join(f'box "{cmd}"' for cmd in docker_debug_cmds)
 
     # 3) Build the full Docker‐run call using a heredoc
     with_gpus = "" if docker_run_machine.is_cpu() else "--gpus=all"
-    lit_download_args = " ".join([
-        f"--studio={this_teamspace.name}/{this_studio.name}",
-        # f"--teamspace={this_teamspace.owner.name}/{this_teamspace.name}",
-        "--local-path=temp_repo",
-    ])
-    local_studio_path = Path("/teamspace/studios/this_studio/")
-    local_repo_archive = Path(repo_archive).relative_to(local_studio_path)
-    local_bash_script = Path(cmd_path).relative_to(local_studio_path)
     job_cmd = (
         "mkdir -p temp_repo && "
-        # download the repo archive to temp_repo
-        f"lightning download file {local_repo_archive} {lit_download_args} && "
-        f"lightning download file {local_bash_script} {lit_download_args} && "
+        # download the repo to temp_repo
+        f"python GH-app-bot/py_bot/downloads.py && "
         "PATH_REPO_TEMP=$(realpath temp_repo) && "
         "ls -lah temp_repo/ && "
         # continue with the real docker run
         " docker run --rm -i"
-        " -v ${PATH_REPO_TEMP}:/temp_repo"
+        " -v ${PATH_REPO_TEMP}:/workspace"
         " -w /workspace"
         f" {with_gpus} {docker_run_image}"
         # Define your box() helper as a Bash function
@@ -207,7 +104,14 @@ async def run_repo_job(
         command=job_cmd,
         machine=docker_run_machine,
         interruptible=to_bool(config.get("interruptible", True)),
-        env={"LIGHTNING_DEBUG": "1"},
+        env={
+            "LIGHTNING_DEBUG": "1",
+            "GITHUB_REPOSITORY_OWNER": config.get("repository_owner"),
+            "GITHUB_REPOSITORY_NAME": config.get("repository_name"),
+            "GITHUB_REF": config.get("repository_ref"),
+            "GITHUB_TOKEN": token,
+            "PATH_WORKSPACE": "temp_repo",
+        },
     )
     return job, cutoff_str
 

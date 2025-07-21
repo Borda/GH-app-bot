@@ -4,6 +4,7 @@ import itertools
 import logging
 import os
 import time
+import zipfile
 from pathlib import Path
 
 import yaml
@@ -203,3 +204,25 @@ def to_bool(value) -> bool:
         raise ValueError(f"Unrecognized boolean value: {value!r}")
 
     raise ValueError(f"Type {type(value).__name__} is not supported for boolean conversion")
+
+
+def extract_zip_archive(zip_path: Path, extract_to: Path, subfolder: str = "") -> Path:
+    """Extract a zip archive to a specified directory, optionally filtering by subfolder."""
+    if not zip_path.is_file():
+        raise FileNotFoundError(f"Zip file {zip_path} does not exist.")
+
+    extract_to.mkdir(parents=True, exist_ok=True)
+
+    with zipfile.ZipFile(zip_path, "r") as zf:
+        first_path = zf.namelist()[0]  # e.g. "repo-owner-repo-sha1234abcd/"
+        root_folder = first_path.split("/", 1)[0]
+        if subfolder:
+            for file_info in zf.infolist():
+                # Remove the first path component (e.g., the root folder) from the file path
+                fname = Path(*Path(file_info.filename).parts[1:])
+                if fname.as_posix().startswith(f"{subfolder}/"):
+                    zf.extract(file_info, extract_to)
+        else:
+            zf.extractall(extract_to)
+
+    return (extract_to / root_folder).resolve()  # Return the path to the extracted repo folder
