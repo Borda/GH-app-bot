@@ -150,7 +150,19 @@ async def run_repo_job(
 
     # 1) List the commands you want to run inside the box
     cutoff_str = ("%" * 15) + f" CUT LOG {generate_unique_hash(32)} " + ("%" * 15)
-    debug_cmds = ["printenv", "cp -r /temp_repo/. /workspace/", "ls -lah", f"cat {docker_run_script}"]
+    debug_cmds = [
+        "printenv",
+        "set -ex:",
+        "ls -lah /temp_repo",
+        f"cp -r /temp_repo/{docker_run_script} /workspace/",
+        "apt-get -q update && apt-get install -q -y unzip",
+        f"unzip /temp_repo/{Path(repo_archive).name} -d /temp_repo/archive/",
+        # "pip install py-tree",
+        # "python -m py_tree -s -d 3 /temp_repo/archive",
+        "mv /temp_repo/archive/*/* /workspace/",
+        "ls -lah",
+        f"cat {docker_run_script}",
+    ]
 
     # 2) Prefix each with `box "<cmd>"`
     boxed_cmds = "\n".join(f'box "{cmd}"' for cmd in debug_cmds)
@@ -158,21 +170,22 @@ async def run_repo_job(
     # 3) Build the full Docker‐run call using a heredoc
     with_gpus = "" if docker_run_machine.is_cpu() else "--gpus=all"
     lit_download_args = " ".join([
-        f"--studio={this_studio.name}",
-        f"--teamspace={this_teamspace.owner.name}/{this_teamspace.name}",
-        "--local-path=/temp_repo",
+        f"--studio={this_teamspace.name}/{this_studio.name}",
+        # f"--teamspace={this_teamspace.owner.name}/{this_teamspace.name}",
+        "--local-path=temp_repo",
     ])
     local_repo_archive = Path(repo_archive).relative_to("/teamspace/studios/this_studio/")
     local_bash_script = Path(cmd_path).relative_to("/teamspace/studios/this_studio/")
     job_cmd = (
-        "mkdir -p /temp_repo && "
-        # download the repo archive to /temp_repo
+        "mkdir -p temp_repo && "
+        # download the repo archive to temp_repo
         f"lightning download file {local_repo_archive} {lit_download_args} && "
         f"lightning download file {local_bash_script} {lit_download_args} && "
-        f"ls -lah /temp_repo && "
+        "PATH_REPO_TEMP=$(realpath temp_repo) && "
+        f"ls -lah temp_repo/ && "
         # continue with the real docker run
         " docker run --rm -i"
-        f" -v /temp_repo:/temp_repo"
+        " -v ${PATH_REPO_TEMP}:/temp_repo"
         " -w /workspace"
         f" {with_gpus} {docker_run_image}"
         # Define your box() helper as a Bash function
@@ -192,6 +205,7 @@ async def run_repo_job(
         command=job_cmd,
         machine=docker_run_machine,
         interruptible=to_bool(config.get("interruptible", True)),
+        env={"LIGHTNING_DEBUG": "1"},
     )
     return job, cutoff_str
 
