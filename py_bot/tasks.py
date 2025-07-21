@@ -87,8 +87,9 @@ def extract_zip_archive(zip_path: Path, extract_to: Path, subfolder: str = "") -
         root_folder = first_path.split("/", 1)[0]
         if subfolder:
             for file_info in zf.infolist():
-                fname = "/".join(file_info.filename.split("/")[1:])
-                if fname.startswith(f"{subfolder}/"):
+                # Remove the first path component (e.g., the root folder) from the file path
+                fname = Path(*Path(file_info.filename).parts[1:])
+                if fname.as_posix().startswith(f"{subfolder}/"):
                     zf.extract(file_info, extract_to)
         else:
             zf.extractall(extract_to)
@@ -152,7 +153,7 @@ async def run_repo_job(
     cutoff_str = ("%" * 15) + f" CUT LOG {generate_unique_hash(32)} " + ("%" * 15)
     debug_cmds = [
         "printenv",
-        "set -ex:",
+        "set -ex",
         "ls -lah /temp_repo",
         f"cp -r /temp_repo/{docker_run_script} /workspace/",
         "apt-get -q update && apt-get install -q -y unzip",
@@ -174,8 +175,9 @@ async def run_repo_job(
         # f"--teamspace={this_teamspace.owner.name}/{this_teamspace.name}",
         "--local-path=temp_repo",
     ])
-    local_repo_archive = Path(repo_archive).relative_to("/teamspace/studios/this_studio/")
-    local_bash_script = Path(cmd_path).relative_to("/teamspace/studios/this_studio/")
+    local_studio_path = Path("/teamspace/studios/this_studio/")
+    local_repo_archive = Path(repo_archive).relative_to(local_studio_path)
+    local_bash_script = Path(cmd_path).relative_to(local_studio_path)
     job_cmd = (
         "mkdir -p temp_repo && "
         # download the repo archive to temp_repo
