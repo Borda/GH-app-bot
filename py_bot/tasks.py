@@ -10,25 +10,22 @@ from lightning_sdk import Job, Machine, Status
 from py_bot.utils import generate_unique_hash, to_bool
 
 BASH_BOX_FUNC = textwrap.dedent("""\
-  box() {
-    local cmd="$1"
-    local tmp;  tmp=$(mktemp)
-    local max=0
-    local line
-    while IFS= read -r line; do
-      echo "$line" >> "$tmp"
-      local len=${#line}
-      (( len > max )) && max=$len
-    done < <(eval "$cmd" 2>&1)
-
-    local border; border=$(printf '%*s' "$max" '' | tr ' ' '-')
-    printf "+%s+\\n" "$border"
-    while IFS= read -r l; do
-      printf "| %-${max}s |\\n" "$l"
-    done < "$tmp"
-    printf "+%s+\\n" "$border"
-    rm "$tmp"
-  }
+box(){
+  cmd="$1"
+  tmp=$(mktemp)
+  max=0
+  while IFS= read -r line; do
+    echo "$line" >> "$tmp"
+    (( ${#line} > max )) && max=${#line}
+  done < <(eval "$cmd" 2>&1)
+  border=$(printf '%*s' "$max" '' | tr ' ' '-')
+  printf "+%s+\\n" "$border"
+  while IFS= read -r l; do
+    printf "| %-${max}s |\\n" "$l"
+  done < "$tmp"
+  printf "+%s+\\n" "$border"
+  rm "$tmp"
+}
 """)
 
 ANSI_ESCAPE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
@@ -55,14 +52,14 @@ async def run_repo_job(cfg_file_name: str, config: dict, params: dict, token: st
     config_env.update(params)  # add params to env
 
     # prepare the environment variables to export
-    export_envs = "\n".join([f"export {k}={shlex.quote(str(v))}" for k, v in config_env.items()])
+    docker_export_envs = "\n".join([f"export {k}={shlex.quote(str(v))}" for k, v in config_env.items()])
 
     # 1) List the commands you want to run inside the box
     cutoff_str = ("%" * 15) + f" CUT LOG {generate_unique_hash(32)} " + ("%" * 15)
     docker_debug_cmds = ["printenv", "set -ex", "ls -lah"]
 
     # 2) Prefix each with `box "<cmd>"`
-    boxed_cmds = "\n".join(f'box "{cmd}"' for cmd in docker_debug_cmds)
+    docker_boxed_cmds = "\n".join(f'box "{cmd}"' for cmd in docker_debug_cmds)
 
     # 3) Build the full Docker‐run call using a heredoc
     with_gpus = "" if docker_run_machine.is_cpu() else "--gpus=all"
@@ -82,9 +79,9 @@ async def run_repo_job(cfg_file_name: str, config: dict, params: dict, token: st
         f" {with_gpus} {docker_run_image}"
         # Define your box() helper as a Bash function
         " bash -s << 'EOF'\n"
-        f"{export_envs}\n"
+        f"{docker_export_envs}\n"
         f"{BASH_BOX_FUNC}\n"
-        f"{boxed_cmds}\n"
+        f"{docker_boxed_cmds}\n"
         f'echo "{cutoff_str}"\n'
         f"{config_run}\n"
         "EOF"
