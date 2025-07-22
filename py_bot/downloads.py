@@ -99,6 +99,7 @@ async def cli_download_repo_and_extract() -> None:
     assert path_folder, "`PATH_REPO_FOLDER` environment variable is not set"
 
     temp_dir = Path(tempfile.gettempdir()).resolve()
+    temp_dir.mkdir(parents=True, exist_ok=True)
     # Download and extract the repository
     print(f"Downloading repository {repo_owner}/{repo_name} at ref {repo_ref}")
     repo_path = await download_repo_and_extract(

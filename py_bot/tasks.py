@@ -59,30 +59,22 @@ async def run_repo_job(cfg_file_name: str, config: dict, params: dict, token: st
 
     # 1) List the commands you want to run inside the box
     cutoff_str = ("%" * 15) + f" CUT LOG {generate_unique_hash(32)} " + ("%" * 15)
-    docker_debug_cmds = [
-        "printenv",
-        "set -ex",
-        # dump multi-lie the script to a file
-        # f'cat > {docker_run_script} << "SCRIPT_EOF"\n{config_run}\nSCRIPT_EOF',
-        "ls -lah",
-        # f"cat {docker_run_script}",
-    ]
+    docker_debug_cmds = ["printenv", "set -ex", "ls -lah"]
 
     # 2) Prefix each with `box "<cmd>"`
     boxed_cmds = "\n".join(f'box "{cmd}"' for cmd in docker_debug_cmds)
 
     # 3) Build the full Docker‐run call using a heredoc
     with_gpus = "" if docker_run_machine.is_cpu() else "--gpus=all"
+    temp_repo_folder = "temp_repo"
     job_cmd = (
         "printenv && "
-        # create a temp directory for the repo
-        "mkdir -p temp_repo && "
-        # "pip install -q py-tree && "
-        # "python -m py_tree -s -d 3 && "
         # download the repo to temp_repo
         "python GH-app-bot/py_bot/downloads.py && "
-        "PATH_REPO_TEMP=$(realpath temp_repo) && "
-        "ls -lah temp_repo/ && "
+        f"PATH_REPO_TEMP=$(realpath {temp_repo_folder}) && "
+        # "pip install -q py-tree && "
+        # "python -m py_tree -s -d 3 && "
+        "ls -lah $PATH_REPO_TEMP && "
         # continue with the real docker run
         "docker run --rm -i"
         " -v ${PATH_REPO_TEMP}:/workspace"
@@ -107,11 +99,11 @@ async def run_repo_job(cfg_file_name: str, config: dict, params: dict, token: st
         interruptible=to_bool(config.get("interruptible", True)),
         env={
             "LIGHTNING_DEBUG": "1",
-            "GITHUB_REPOSITORY_OWNER": config.get("repository_owner"),
-            "GITHUB_REPOSITORY_NAME": config.get("repository_name"),
-            "GITHUB_REPOSITORY_REF": config.get("repository_ref"),
+            "GITHUB_REPOSITORY_OWNER": config.get("repository_owner", ""),
+            "GITHUB_REPOSITORY_NAME": config.get("repository_name", ""),
+            "GITHUB_REPOSITORY_REF": config.get("repository_ref", ""),
             "GITHUB_TOKEN": token,
-            "PATH_REPO_FOLDER": "temp_repo",
+            "PATH_REPO_FOLDER": temp_repo_folder,
         },
     )
     return job, cutoff_str
