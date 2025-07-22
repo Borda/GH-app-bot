@@ -10,25 +10,7 @@ from lightning_sdk import Job, Machine, Status
 from py_bot.utils import generate_unique_hash, to_bool
 
 BASH_BOX_FUNC = textwrap.dedent("""\
-  box() {
-    local cmd="$1"
-    local tmp;  tmp=$(mktemp)
-    local max=0
-    local line
-    while IFS= read -r line; do
-      echo "$line" >> "$tmp"
-      local len=${#line}
-      (( len > max )) && max=$len
-    done < <(eval "$cmd" 2>&1)
-
-    local border; border=$(printf '%*s' "$max" '' | tr ' ' '-')
-    printf "+%s+\\n" "$border"
-    while IFS= read -r l; do
-      printf "| %-${max}s |\\n" "$l"
-    done < "$tmp"
-    printf "+%s+\\n" "$border"
-    rm "$tmp"
-  }
+box(){cmd="$1";tmp=$(mktemp);max=0;while IFS= read -r line;do echo "$line">>"$tmp";(( ${#line}>max ))&&max=${#line};done< <(eval "$cmd"2>&1);border=$(printf '%*s' "$max" ''|tr ' '-'');printf "+%s+\\n" "$border";while IFS= read -r l;do printf "| %-${max}s |\\n" "$l";done<"$tmp";printf "+%s+\\n" "$border";rm "$tmp";}
 """)
 
 ANSI_ESCAPE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
