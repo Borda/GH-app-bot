@@ -10,7 +10,22 @@ from lightning_sdk import Job, Machine, Status
 from py_bot.utils import generate_unique_hash, to_bool
 
 BASH_BOX_FUNC = textwrap.dedent("""\
-box(){cmd="$1";tmp=$(mktemp);max=0;while IFS= read -r line;do echo "$line">>"$tmp";(( ${#line}>max ))&&max=${#line};done< <(eval "$cmd"2>&1);border=$(printf '%*s' "$max" ''|tr ' '-'');printf "+%s+\\n" "$border";while IFS= read -r l;do printf "| %-${max}s |\\n" "$l";done<"$tmp";printf "+%s+\\n" "$border";rm "$tmp";}
+box(){
+  cmd="$1"
+  tmp=$(mktemp)
+  max=0
+  while IFS= read -r line; do
+    echo "$line" >> "$tmp"
+    (( ${#line} > max )) && max=${#line}
+  done < <(eval "$cmd" 2>&1)
+  border=$(printf '%*s' "$max" '' | tr ' ' '-')
+  printf "+%s+\\n" "$border"
+  while IFS= read -r l; do
+    printf "| %-${max}s |\\n" "$l"
+  done < "$tmp"
+  printf "+%s+\\n" "$border"
+  rm "$tmp"
+}
 """)
 
 ANSI_ESCAPE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
@@ -86,6 +101,7 @@ async def run_repo_job(cfg_file_name: str, config: dict, params: dict, token: st
             "GITHUB_REPOSITORY_REF": config.get("repository_ref", ""),
             "GITHUB_TOKEN": token,
             "PATH_REPO_FOLDER": temp_repo_folder,
+            "CI_RUN": config_run
         },
     )
     return job, cutoff_str
