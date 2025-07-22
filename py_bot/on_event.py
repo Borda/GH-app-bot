@@ -344,7 +344,7 @@ async def run_and_complete(
             else:
                 logging.warning(f"Job `{job_name}` timed out after {timeout_minutes} minutes")
         except Exception as ex:
-            run_status, run_conclusion = GitHubRunStatus.COMPLETED, GitHubRunConclusion.NEUTRAL
+            run_status, run_conclusion = GitHubRunStatus.COMPLETED, GitHubRunConclusion.ACTION_REQUIRED
             summary = f"Job `{job_name}` failed due to an unexpected error: {ex!s}"
             if debug_mode:
                 results = f"{ex!s}"
