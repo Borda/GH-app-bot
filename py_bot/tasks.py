@@ -64,27 +64,26 @@ async def run_repo_job(cfg_file_name: str, config: dict, params: dict, token: st
     # 3) Build the full Docker‐run call using a heredoc
     with_gpus = "" if docker_run_machine.is_cpu() else "--gpus=all"
     temp_repo_folder = "temp_repo"
+    script_file = "job_script.sh"
+    script_content = textwrap.dedent(f"""\
+    {docker_export_envs}
+    {BASH_BOX_FUNC}
+    {docker_boxed_cmds}
+    echo "{cutoff_str}"
+    {config_run}
+    """)
     job_cmd = (
         "printenv && "
-        # download the repo to temp_repo
         "python GH-app-bot/py_bot/downloads.py && "
         f"PATH_REPO_TEMP=$(realpath {temp_repo_folder}) && "
-        # "pip install -q py-tree && "
-        # "python -m py_tree -s -d 3 && "
+        f"printf %s {shlex.quote(script_content)} > $PATH_REPO_TEMP/{script_file} && "
+        f"chmod +x $PATH_REPO_TEMP/{script_file} && "
         "ls -lah $PATH_REPO_TEMP && "
-        # continue with the real docker run
         "docker run --rm -i"
         " -v ${PATH_REPO_TEMP}:/workspace"
         " -w /workspace"
         f" {with_gpus} {docker_run_image}"
-        # Define your box() helper as a Bash function
-        " bash -s << 'EOF'\n"
-        f"{docker_export_envs}\n"
-        f"{BASH_BOX_FUNC}\n"
-        f"{docker_boxed_cmds}\n"
-        f'echo "{cutoff_str}"\n'
-        f"{config_run}\n"
-        "EOF"
+        f" bash {script_file}"
     )
     logging.debug(f"job >> {job_cmd}")
 

@@ -302,7 +302,7 @@ async def run_and_complete(
             if job.status in STATUS_RUNNING_OR_FINISHED:
                 break
             if asyncio.get_event_loop().time() - queue_start > JOB_QUEUE_TIMEOUT:
-                run_status, run_conclusion = GitHubRunStatus.COMPLETED, GitHubRunConclusion.TIMED_OUT
+                run_status, run_conclusion = GitHubRunStatus.COMPLETED, GitHubRunConclusion.CANCELLED
                 summary = f"Job `{job_name}` didn't start within the provided ({JOB_QUEUE_TIMEOUT}) timeout."
                 job.stop()
                 break
