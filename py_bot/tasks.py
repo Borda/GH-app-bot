@@ -27,8 +27,18 @@ box(){
   rm "$tmp"
 }
 """)
-
 ANSI_ESCAPE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
+
+
+def _generate_script_content(export_envs, config_run, cutoff_str):
+    return textwrap.dedent(f"""#!/bin/bash
+{export_envs}
+printenv
+ls -lah
+set -ex
+echo "{cutoff_str}"
+{config_run}
+    """)
 
 
 def strip_ansi(text: str) -> str:
@@ -52,26 +62,19 @@ async def run_repo_job(cfg_file_name: str, config: dict, params: dict, token: st
     config_env.update(params)  # add params to env
 
     # prepare the environment variables to export
-    docker_export_envs = "\n".join([f"export {k}={shlex.quote(str(v))}" for k, v in config_env.items()])
+    export_envs = "\n".join([f"export {k}={shlex.quote(str(v))}" for k, v in config_env.items()])
 
     # 1) List the commands you want to run inside the box
+    job_hash = generate_unique_hash(16, params=params)
     cutoff_str = ("%" * 15) + f" CUT LOG {generate_unique_hash(32)} " + ("%" * 15)
-    docker_debug_cmds = ["printenv", "set -ex", "ls -lah"]
 
-    # 2) Prefix each with `box "<cmd>"`
-    docker_boxed_cmds = "\n".join(f'box "{cmd}"' for cmd in docker_debug_cmds)
+    # 2) generate the script content
+    script_file = f"{cfg_file_name.replace('.', '_')}_{job_hash}.sh"
+    script_content = _generate_script_content(export_envs=export_envs, config_run=config_run, cutoff_str=cutoff_str)
 
     # 3) Build the full Docker‐run call using a heredoc
     with_gpus = "" if docker_run_machine.is_cpu() else "--gpus=all"
     temp_repo_folder = "temp_repo"
-    script_file = "job_script.sh"
-    script_content = textwrap.dedent(f"""\
-    {docker_export_envs}
-    {BASH_BOX_FUNC}
-    {docker_boxed_cmds}
-    echo "{cutoff_str}"
-    {config_run}
-    """)
     job_cmd = (
         "printenv && "
         "python GH-app-bot/py_bot/downloads.py && "
@@ -83,7 +86,8 @@ async def run_repo_job(cfg_file_name: str, config: dict, params: dict, token: st
         " -v ${PATH_REPO_TEMP}:/workspace"
         " -w /workspace"
         f" {with_gpus} {docker_run_image}"
-        f" bash {script_file}"
+        f" bash {script_file} && "
+        f'echo "==================================\n$?\n=================================="'
     )
     logging.debug(f"job >> {job_cmd}")
 
