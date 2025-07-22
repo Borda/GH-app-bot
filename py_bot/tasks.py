@@ -104,7 +104,7 @@ async def run_repo_job(cfg_file_name: str, config: dict, params: dict, token: st
             "GITHUB_REPOSITORY_REF": config.get("repository_ref", ""),
             "GITHUB_TOKEN": token,
             "PATH_REPO_FOLDER": temp_repo_folder,
-            "CI_RUN": config_run
+            "CI_RUN": textwrap.dedent(config_run)
         },
     )
     return job, cutoff_str
