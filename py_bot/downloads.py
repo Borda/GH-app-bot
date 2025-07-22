@@ -42,7 +42,7 @@ async def download_repo_and_extract(
     folder_path: str | Path,
     subfolder: str = "",
     suffix: str = "",
-) -> Path:
+) -> Path | None:
     """Download a GitHub repository at a specific ref (branch, tag, commit) and extract it to a temp directory."""
     # 1) Fetch zipball archive
     url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/zipball/{git_ref}"
@@ -72,6 +72,8 @@ async def download_repo_and_extract(
 
     # 3) rename the extracted folder if a suffix is provided
     path_repo = folder_path / root_folder
+    if not path_repo.exists():
+        return None
     if suffix:
         new_path_repo = folder_path / f"{root_folder}-{suffix}"
         if new_path_repo.exists():
@@ -109,6 +111,8 @@ async def cli_download_repo_and_extract() -> None:
         token=token,
         folder_path=temp_dir,
     )
+    if not repo_path:
+        raise FileNotFoundError(f"Failed to download or extract repository {repo_owner}/{repo_name} at ref {repo_ref}")
     print(f"Repository downloaded and extracted to {repo_path}")
     # move the extracted folder to the workspace
     # Ensure the destination folder exists

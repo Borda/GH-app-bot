@@ -113,6 +113,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
     link_lightning_jobs = f"{LIGHTNING_CLOUD_URL}/{this_teamspace.owner.name}/{this_teamspace.name}/jobs/"
     # Create a partial function for posting check runs
     post_check = partial(post_with_retry, gh=gh, url=f"/repos/{repo_owner}/{repo_name}/check-runs")
+    configs, config_error = [], None
 
     # 1) Download the repository at the specified ref
     repo_dir = await download_repo_and_extract(
@@ -125,21 +126,22 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
         subfolder=".lightning",  # extract only `.lightning` subfolder
         suffix=f"event-{event.delivery_id}",
     )
-    if not repo_dir.is_dir():
-        raise RuntimeError(f"Failed to extract repo {repo_owner}/{repo_name} at {head_sha}")
-    logging.info(f"Downloaded repo {repo_owner}/{repo_name} at {head_sha} to {repo_dir}")
 
     # 2) Read the config file
-    repo_dir = Path(repo_dir).resolve()
-    configs, config_error = [], None
-    config_dir = repo_dir / ".lightning" / "workflows"
-    try:
-        configs = load_configs_from_folder(config_dir)
-    except Exception as ex:
-        config_error = ex
-    finally:
-        logging.info(f"Cleaning up the repo directory: {repo_dir}")
-        shutil.rmtree(repo_dir, ignore_errors=True)
+    if repo_dir and repo_dir.is_dir():
+        logging.info(f"Downloaded repo {repo_owner}/{repo_name} at {head_sha} to {repo_dir}")
+        repo_dir = Path(repo_dir).resolve()
+        config_dir = repo_dir / ".lightning" / "workflows"
+        try:
+            configs = load_configs_from_folder(config_dir)
+        except Exception as ex:
+            config_error = ex
+        finally:
+            logging.info(f"Cleaning up the repo directory: {repo_dir}")
+            shutil.rmtree(repo_dir, ignore_errors=True)
+    else:
+        config_dir = None
+        logging.warn(f"Failed to extract `.lightning` folder from repo {repo_owner}/{repo_name} at {head_sha}")
 
     if not configs:
         logging.warn(f"No valid configs found in {config_dir}")
