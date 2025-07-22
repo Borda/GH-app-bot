@@ -57,7 +57,6 @@ async def run_repo_job(cfg_file_name: str, config: dict, params: dict, token: st
     # 1) List the commands you want to run inside the box
     cutoff_str = ("%" * 15) + f" CUT LOG {generate_unique_hash(32)} " + ("%" * 15)
     docker_debug_cmds = ["printenv", "set -ex", "ls -lah"]
-    docker_path_script = f"{cfg_file_name.replace('.', '_')}-{generate_unique_hash(length=16, params=params)}.sh"
 
     # 2) Prefix each with `box "<cmd>"`
     docker_boxed_cmds = "\n".join(f'box "{cmd}"' for cmd in docker_debug_cmds)
@@ -72,8 +71,6 @@ async def run_repo_job(cfg_file_name: str, config: dict, params: dict, token: st
         f"PATH_REPO_TEMP=$(realpath {temp_repo_folder}) && "
         # "pip install -q py-tree && "
         # "python -m py_tree -s -d 3 && "
-        f'echo "$CI_RUN" > $PATH_REPO_TEMP/{docker_path_script} && '
-        f"cat $PATH_REPO_TEMP/{docker_path_script} && "
         "ls -lah $PATH_REPO_TEMP && "
         # continue with the real docker run
         "docker run --rm -i"
@@ -86,7 +83,7 @@ async def run_repo_job(cfg_file_name: str, config: dict, params: dict, token: st
         f"{BASH_BOX_FUNC}\n"
         f"{docker_boxed_cmds}\n"
         f'echo "{cutoff_str}"\n'
-        f'bash {docker_path_script}\n'
+        f"{config_run}\n"
         "EOF"
     )
     logging.debug(f"job >> {job_cmd}")
@@ -104,7 +101,6 @@ async def run_repo_job(cfg_file_name: str, config: dict, params: dict, token: st
             "GITHUB_REPOSITORY_REF": config.get("repository_ref", ""),
             "GITHUB_TOKEN": token,
             "PATH_REPO_FOLDER": temp_repo_folder,
-            "CI_RUN": textwrap.dedent(config_run)
         },
     )
     return job, cutoff_str
