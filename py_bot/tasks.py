@@ -68,8 +68,8 @@ async def run_repo_job(
 
     # 1) List the commands you want to run inside the box
     job_hash = generate_unique_hash(16, params=params)
-    logs_hash = ("%" * 20) + f"RUN-LOGS-{generate_unique_hash(32)}" + ("%" * 20)
-    exit_hash = ("%" * 20) + f"EXIT-CODE-{generate_unique_hash(32)}" + ("%" * 20)
+    logs_hash = ("%" * 20) + f"_RUN-LOGS-{generate_unique_hash(32)}_" + ("%" * 20)
+    exit_hash = ("%" * 20) + f"_EXIT-CODE-{generate_unique_hash(32)}_" + ("%" * 20)
 
     # 2) generate the script content
     script_file = f"{cfg_file_name.replace('.', '_')}_{job_hash}.sh"
@@ -89,7 +89,7 @@ async def run_repo_job(
         " -v ${PATH_REPO_TEMP}:/workspace"
         " -w /workspace"
         f" {with_gpus} {docker_run_image}"
-        f" bash {script_file} && "
+        f" bash {script_file} ; "
         f'echo "{exit_hash}\n$?\n{exit_hash}"'
     )
     logging.debug(f"job >> {job_cmd}")
