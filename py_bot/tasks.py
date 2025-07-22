@@ -52,14 +52,15 @@ async def run_repo_job(cfg_file_name: str, config: dict, params: dict, token: st
     config_env.update(params)  # add params to env
 
     # prepare the environment variables to export
-    export_envs = "\n".join([f"export {k}={shlex.quote(str(v))}" for k, v in config_env.items()])
+    docker_export_envs = "\n".join([f"export {k}={shlex.quote(str(v))}" for k, v in config_env.items()])
 
     # 1) List the commands you want to run inside the box
     cutoff_str = ("%" * 15) + f" CUT LOG {generate_unique_hash(32)} " + ("%" * 15)
     docker_debug_cmds = ["printenv", "set -ex", "ls -lah"]
+    docker_path_script = f"{cfg_file_name.replace('.', '_')}-{generate_unique_hash(length=16, params=params)}.sh"
 
     # 2) Prefix each with `box "<cmd>"`
-    boxed_cmds = "\n".join(f'box "{cmd}"' for cmd in docker_debug_cmds)
+    docker_boxed_cmds = "\n".join(f'box "{cmd}"' for cmd in docker_debug_cmds)
 
     # 3) Build the full Docker‐run call using a heredoc
     with_gpus = "" if docker_run_machine.is_cpu() else "--gpus=all"
@@ -71,6 +72,8 @@ async def run_repo_job(cfg_file_name: str, config: dict, params: dict, token: st
         f"PATH_REPO_TEMP=$(realpath {temp_repo_folder}) && "
         # "pip install -q py-tree && "
         # "python -m py_tree -s -d 3 && "
+        f'echo "$CI_RUN" > $PATH_REPO_TEMP/{docker_path_script} && '
+        f"cat $PATH_REPO_TEMP/{docker_path_script} && "
         "ls -lah $PATH_REPO_TEMP && "
         # continue with the real docker run
         "docker run --rm -i"
@@ -79,11 +82,11 @@ async def run_repo_job(cfg_file_name: str, config: dict, params: dict, token: st
         f" {with_gpus} {docker_run_image}"
         # Define your box() helper as a Bash function
         " bash -s << 'EOF'\n"
-        f"{export_envs}\n"
+        f"{docker_export_envs}\n"
         f"{BASH_BOX_FUNC}\n"
-        f"{boxed_cmds}\n"
+        f"{docker_boxed_cmds}\n"
         f'echo "{cutoff_str}"\n'
-        f"{config_run}\n"
+        f'bash {docker_path_script}\n'
         "EOF"
     )
     logging.debug(f"job >> {job_cmd}")
