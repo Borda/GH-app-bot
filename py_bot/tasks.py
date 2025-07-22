@@ -35,7 +35,6 @@ def _generate_script_content(export_envs, config_run, separator_str):
 {export_envs}
 printenv
 ls -lah
-set -ex
 echo "{separator_str}"
 {config_run}
     """)
