@@ -2,6 +2,8 @@
 
 A comprehensive GitHub App that automates pull request validation and continuous integration using Lightning's distributed compute platform and configurable YAML workflows.
 
+![GitHub Bot app](assets/lit-ci-demo.jpg)
+
 ## Overview
 
 This bot provides automated code quality assurance and testing for your GitHub repositories by:
