@@ -78,17 +78,18 @@ async def run_repo_job(
     with_gpus = "" if docker_run_machine.is_cpu() else "--gpus=all"
     temp_repo_folder = "temp_repo"
     job_cmd = (
-        "printenv && "
-        "python GH-app-bot/py_bot/downloads.py && "
-        f"PATH_REPO_TEMP=$(realpath {temp_repo_folder}) && "
-        f"printf %s {shlex.quote(script_content)} > $PATH_REPO_TEMP/{script_file} && "
-        f"chmod +x $PATH_REPO_TEMP/{script_file} && "
-        "ls -lah $PATH_REPO_TEMP && "
+        "set -ex ; "
+        "printenv ; "
+        "python GH-app-bot/py_bot/downloads.py ; "
+        f"PATH_REPO_TEMP=$(realpath {temp_repo_folder}) ; "
+        f"printf %s {shlex.quote(script_content)} > $PATH_REPO_TEMP/{script_file} ; "
+        f"chmod +x $PATH_REPO_TEMP/{script_file} ; "
+        "ls -lah $PATH_REPO_TEMP ; "
         "( docker run --rm -i"
         " -v ${PATH_REPO_TEMP}:/workspace"
         " -w /workspace"
         f" {with_gpus} {docker_run_image}"
-        f" bash -eo pipefail {script_file} ) ; "
+        f" bash -eo pipefail {script_file} || true ) ; "
         f'echo "{exit_hash}\n$?\n{exit_hash}"'
     )
     logging.debug(f"job >> {job_cmd}")
