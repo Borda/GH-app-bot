@@ -78,7 +78,7 @@ async def run_repo_job(
     with_gpus = "" if docker_run_machine.is_cpu() else "--gpus=all"
     temp_repo_folder = "temp_repo"
     job_cmd = (
-        "set -ex ; "
+        "set -e ; "
         "printenv ; "
         "python GH-app-bot/py_bot/downloads.py ; "
         f"PATH_REPO_TEMP=$(realpath {temp_repo_folder}) ; "

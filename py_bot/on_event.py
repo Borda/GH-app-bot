@@ -19,6 +19,7 @@ from py_bot.utils import (
     generate_matrix_from_config,
     is_triggered_by_event,
     load_configs_from_folder,
+wrap_long_lines
 )
 
 JOB_QUEUE_TIMEOUT = 60 * 60  # 1 hour
@@ -354,6 +355,7 @@ async def run_and_complete(
     logging.info(
         f"Job finished with {run_conclusion} >>> {url_job or (url_job_table + ' search for name ' + job_name)}"
     )
+    results = wrap_long_lines(results)
     if len(results) > MAX_OUTPUT_LENGTH:
         results = results[: MAX_OUTPUT_LENGTH - 20] + "\n…(truncated)"
     await fn_patch_check_run(

@@ -3,6 +3,7 @@ import hashlib
 import itertools
 import logging
 import os
+import textwrap
 import time
 import zipfile
 from pathlib import Path
@@ -226,3 +227,19 @@ def extract_zip_archive(zip_path: Path, extract_to: Path, subfolder: str = "") -
             zf.extractall(extract_to)
 
     return (extract_to / root_folder).resolve()  # Return the path to the extracted repo folder
+
+
+def wrap_long_lines(text: str, width: int = 200) -> str:
+    """Wrap long lines in the text to a specified width, using '>' as the continuation symbol.
+
+    >>> wrap_long_lines("This is a very long line that should be wrapped to fit within 20 characters.", width=20)
+    'This is a very long\n↪ line that should\n↪ be wrapped to fit\n↪ within 20\n↪ characters.'
+    """
+    return "\n".join(
+        textwrap.wrap(
+            text,
+            width=width,
+            replace_whitespace=False,
+            subsequent_indent="↪ "  # Unicode character for right arrow with hook (↪️
+        )
+    )
