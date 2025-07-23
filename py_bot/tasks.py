@@ -84,11 +84,11 @@ async def run_repo_job(
         f"printf %s {shlex.quote(script_content)} > $PATH_REPO_TEMP/{script_file} && "
         f"chmod +x $PATH_REPO_TEMP/{script_file} && "
         "ls -lah $PATH_REPO_TEMP && "
-        "docker run --rm -i"
+        "( docker run --rm -i"
         " -v ${PATH_REPO_TEMP}:/workspace"
         " -w /workspace"
         f" {with_gpus} {docker_run_image}"
-        f" bash -eo pipefail {script_file} ; "
+        f" bash -eo pipefail {script_file} ) ; "
         f'echo "{exit_hash}\n$?\n{exit_hash}"'
     )
     logging.debug(f"job >> {job_cmd}")
