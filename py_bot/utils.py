@@ -245,7 +245,7 @@ def wrap_long_lines(text: str, width: int = 200) -> str:
     wrapper = TextWrapper(
         width=width,
         replace_whitespace=False,
-        subsequent_indent="↪ ",  # Unicode character for right arrow with hook (↪️
+        subsequent_indent="↪ ",  # Unicode character for right arrow with hook (↪)
     )
     lines = [wrapper.fill(line) for line in text.splitlines()]
     return "\n".join(lines)
