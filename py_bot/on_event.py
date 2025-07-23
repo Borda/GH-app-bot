@@ -15,7 +15,7 @@ from lightning_sdk.lightning_cloud.env import LIGHTNING_CLOUD_URL
 
 from py_bot.downloads import download_repo_and_extract
 from py_bot.tasks import finalize_job, run_repo_job
-from py_bot.utils import generate_matrix_from_config, is_triggered_by_event, load_configs_from_folder, wrap_long_lines
+from py_bot.utils import generate_matrix_from_config, is_triggered_by_event, load_configs_from_folder, wrap_long_text
 
 JOB_QUEUE_TIMEOUT = 60 * 60  # 1 hour
 JOB_QUEUE_INTERVAL = 10  # 10 seconds
@@ -350,9 +350,7 @@ async def run_and_complete(
     logging.info(
         f"Job finished with {run_conclusion} >>> {url_job or (url_job_table + ' search for name ' + job_name)}"
     )
-    results = wrap_long_lines(results)
-    if len(results) > MAX_OUTPUT_LENGTH:
-        results = results[: MAX_OUTPUT_LENGTH - 20] + "\n…(truncated)"
+    results = wrap_long_text(results, text_length=MAX_OUTPUT_LENGTH - 20)  # wrap the results to fit in the output
     await fn_patch_check_run(
         data={
             "status": run_status.value,
