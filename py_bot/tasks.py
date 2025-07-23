@@ -27,8 +27,17 @@ box(){
   rm "$tmp"
 }
 """)
-
 ANSI_ESCAPE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
+
+
+def _generate_script_content(export_envs, config_run, separator_str):
+    return textwrap.dedent(f"""#!/bin/bash
+{export_envs}
+printenv
+ls -lah
+echo "{separator_str}"
+{config_run}
+    """)
 
 
 def strip_ansi(text: str) -> str:
@@ -41,7 +50,9 @@ async def run_sleeping_task(*args: Any, **kwargs: Any):
     return True
 
 
-async def run_repo_job(cfg_file_name: str, config: dict, params: dict, token: str, job_name: str) -> tuple[Job, str]:
+async def run_repo_job(
+    cfg_file_name: str, config: dict, params: dict, token: str, job_name: str
+) -> tuple[Job, str, str]:
     """Download the full repo at `ref` into a tempdir, look for config and execute the job."""
     # mandatory
     config_run = config["run"]
@@ -52,39 +63,37 @@ async def run_repo_job(cfg_file_name: str, config: dict, params: dict, token: st
     config_env.update(params)  # add params to env
 
     # prepare the environment variables to export
-    docker_export_envs = "\n".join([f"export {k}={shlex.quote(str(v))}" for k, v in config_env.items()])
+    export_envs = "\n".join([f"export {k}={shlex.quote(str(v))}" for k, v in config_env.items()])
 
     # 1) List the commands you want to run inside the box
-    cutoff_str = ("%" * 15) + f" CUT LOG {generate_unique_hash(32)} " + ("%" * 15)
-    docker_debug_cmds = ["printenv", "set -ex", "ls -lah"]
+    job_hash = generate_unique_hash(16, params=params)
+    logs_hash = ("%" * 20) + f"_RUN-LOGS-{generate_unique_hash(32)}_" + ("%" * 20)
+    exit_hash = ("%" * 20) + f"_EXIT-CODE-{generate_unique_hash(32)}_" + ("%" * 20)
 
-    # 2) Prefix each with `box "<cmd>"`
-    docker_boxed_cmds = "\n".join(f'box "{cmd}"' for cmd in docker_debug_cmds)
+    # 2) generate the script content
+    script_file = f"{cfg_file_name.replace('.', '_')}_{job_hash}.sh"
+    script_content = _generate_script_content(export_envs=export_envs, config_run=config_run, separator_str=logs_hash)
 
     # 3) Build the full Docker‐run call using a heredoc
     with_gpus = "" if docker_run_machine.is_cpu() else "--gpus=all"
     temp_repo_folder = "temp_repo"
     job_cmd = (
-        "printenv && "
-        # download the repo to temp_repo
-        "python GH-app-bot/py_bot/downloads.py && "
-        f"PATH_REPO_TEMP=$(realpath {temp_repo_folder}) && "
-        # "pip install -q py-tree && "
-        # "python -m py_tree -s -d 3 && "
-        "ls -lah $PATH_REPO_TEMP && "
-        # continue with the real docker run
+        "set -e ; "
+        "printenv ; "
+        "python GH-app-bot/py_bot/downloads.py ; "
+        f"PATH_REPO_TEMP=$(realpath {temp_repo_folder}) ; "
+        f"cat > $PATH_REPO_TEMP/{script_file} << 'EOF' ;\n"
+        f"{script_content}\n"
+        "EOF\n"
+        f"chmod +x $PATH_REPO_TEMP/{script_file} ; "
+        "ls -lah $PATH_REPO_TEMP ; "
+        "rc=0 ; "
         "docker run --rm -i"
         " -v ${PATH_REPO_TEMP}:/workspace"
         " -w /workspace"
         f" {with_gpus} {docker_run_image}"
-        # Define your box() helper as a Bash function
-        " bash -s << 'EOF'\n"
-        f"{docker_export_envs}\n"
-        f"{BASH_BOX_FUNC}\n"
-        f"{docker_boxed_cmds}\n"
-        f'echo "{cutoff_str}"\n'
-        f"{config_run}\n"
-        "EOF"
+        f" bash -eo pipefail {script_file} || rc=$? ; "
+        f'echo "{exit_hash}\n$rc\n{exit_hash}" ; '
     )
     logging.debug(f"job >> {job_cmd}")
 
@@ -103,22 +112,24 @@ async def run_repo_job(cfg_file_name: str, config: dict, params: dict, token: st
             "PATH_REPO_FOLDER": temp_repo_folder,
         },
     )
-    return job, cutoff_str
+    return job, logs_hash, exit_hash
 
 
-def finalize_job(job: Job, cutoff_str: str, debug: bool = False) -> tuple[Status, str]:
+def finalize_job(job: Job, logs_hash: str, exit_hash: str, debug: bool = False) -> tuple[Status, int | None, str]:
     """Finalize the job by updating its status and logs."""
     logs = strip_ansi(job.logs or "No logs available")
-    if debug or not cutoff_str:
-        return job.status, logs
+    search_exit_code = re.search(rf"{exit_hash}\n(\d+)\n{exit_hash}", logs)
+    exit_code = int(search_exit_code.group(1)) if search_exit_code else None
+    if debug or not logs_hash:
+        return job.status, exit_code, logs
     # in non-debug mode, we cut the logs to avoid too much output
     # we expect the logs to contain the cutoff string twice
     for it in range(2):
         # cut the logs all before the cutoff string
-        cutoff_index = logs.find(cutoff_str)
+        cutoff_index = logs.find(logs_hash)
         if cutoff_index == -1:
             logging.warn(f"iter {it}: the cutoff string was not found in the logs")
-        logs = logs[cutoff_index + len(cutoff_str) :]
+        logs = logs[cutoff_index + len(logs_hash) :]
 
     # todo: cleanup job if needed or success
-    return job.status, logs
+    return job.status, exit_code, logs

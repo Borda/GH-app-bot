@@ -6,6 +6,7 @@ import os
 import time
 import zipfile
 from pathlib import Path
+from textwrap import TextWrapper
 
 import yaml
 
@@ -226,3 +227,29 @@ def extract_zip_archive(zip_path: Path, extract_to: Path, subfolder: str = "") -
             zf.extractall(extract_to)
 
     return (extract_to / root_folder).resolve()  # Return the path to the extracted repo folder
+
+
+def wrap_long_text(text: str, line_width: int = 200, text_length: int = 65525) -> str:
+    """Wrap long lines in the text to a specified width, using '>' as the continuation symbol.
+
+    >>> my_text = '''Well, well, well, what do we have here?
+    ... This is a very long line that should be wrapped to fit within N characters.
+    ... It should also handle multiple lines correctly.
+    ... '''
+    >>> print(wrap_long_text(my_text, line_width=56, text_length=100))
+    Well, well, well, what do we have here?
+    This is a very long line that should be wrapped to fit
+    …(truncated)
+    """
+    wrapper = TextWrapper(
+        width=line_width,
+        replace_whitespace=False,
+        subsequent_indent="↪ ",  # Unicode character for right arrow with hook (↪)
+    )
+    lines = [wrapper.fill(line) for line in text.splitlines()]
+    text_wrapped = "\n".join(lines)
+    if len(text_wrapped) > text_length:
+        text_wrapped = text_wrapped[:text_length]
+        lines_truncated = text_wrapped.splitlines()
+        text_wrapped = "\n".join(lines_truncated[:-1] + ["…(truncated)"])
+    return text_wrapped

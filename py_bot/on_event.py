@@ -15,11 +15,7 @@ from lightning_sdk.lightning_cloud.env import LIGHTNING_CLOUD_URL
 
 from py_bot.downloads import download_repo_and_extract
 from py_bot.tasks import finalize_job, run_repo_job
-from py_bot.utils import (
-    generate_matrix_from_config,
-    is_triggered_by_event,
-    load_configs_from_folder,
-)
+from py_bot.utils import generate_matrix_from_config, is_triggered_by_event, load_configs_from_folder, wrap_long_text
 
 JOB_QUEUE_TIMEOUT = 60 * 60  # 1 hour
 JOB_QUEUE_INTERVAL = 10  # 10 seconds
@@ -267,10 +263,10 @@ async def run_and_complete(
     run_conclusion = GitHubRunConclusion.NEUTRAL
     url_job = ""  # URL to the job in Lightning Cloud
     url_job_table = f"{LIGHTNING_CLOUD_URL}/{this_teamspace.owner.name}/{this_teamspace.name}/jobs/"  # Link to all jobs
-    cutoff_str = ""  # String used for cutoff processing
+    logs_separator, exit_separator = "", ""  # String used for cutoff processing
 
     try:
-        job, cutoff_str = await run_repo_job(
+        job, logs_separator, exit_separator = await run_repo_job(
             cfg_file_name=cfg_file_name,
             config=config,
             params=params,
@@ -302,7 +298,7 @@ async def run_and_complete(
             if job.status in STATUS_RUNNING_OR_FINISHED:
                 break
             if asyncio.get_event_loop().time() - queue_start > JOB_QUEUE_TIMEOUT:
-                run_status, run_conclusion = GitHubRunStatus.COMPLETED, GitHubRunConclusion.TIMED_OUT
+                run_status, run_conclusion = GitHubRunStatus.COMPLETED, GitHubRunConclusion.CANCELLED
                 summary = f"Job `{job_name}` didn't start within the provided ({JOB_QUEUE_TIMEOUT}) timeout."
                 job.stop()
                 break
@@ -321,17 +317,22 @@ async def run_and_complete(
                 "details_url": url_job or url_job_table,
             },
         )
+        timeout_minutes = 60  # the default timeout is 60 minutes
         try:
-            timeout_minutes = float(config.get("timeout", 60))  # the default timeout is 60 minutes
-            await job.async_wait(timeout=timeout_minutes * 60)  # wait for the job to finish
-            job_status, results = finalize_job(job, cutoff_str, debug=debug_mode)
-            run_status = GitHubRunStatus.COMPLETED
-            run_conclusion = (
-                GitHubRunConclusion.SUCCESS if job_status == Status.Completed else GitHubRunConclusion.FAILURE
+            timeout_minutes = float(config.get("timeout", timeout_minutes))  # the default timeout is 60 minutes
+            await job.async_wait(timeout=timeout_minutes * 60, stop_on_timeout=True)  # wait for the job to finish
+            job_status, exit_code, results = finalize_job(
+                job, logs_hash=logs_separator, exit_hash=exit_separator, debug=debug_mode
             )
-            summary = f"Job `{job_name}` finished as {job_status}"
+            run_status = GitHubRunStatus.COMPLETED
+            if exit_code is None:  # if the job didn't return an exit code
+                run_conclusion = GitHubRunConclusion.NEUTRAL
+            elif exit_code == 0:  # if the job finished successfully
+                run_conclusion = GitHubRunConclusion.SUCCESS
+            else:  # if the job failed
+                run_conclusion = GitHubRunConclusion.FAILURE
+            summary = f"Job `{job_name}` finished as {job_status} with exit code {exit_code}."
         except TimeoutError:
-            job.stop()  # todo: drop it when waiting will have arg `stop_on_timeout=True`
             run_status, run_conclusion = GitHubRunStatus.COMPLETED, GitHubRunConclusion.CANCELLED
             summary = f"Job `{job_name}` cancelled due to timeout after {timeout_minutes} minutes."
             if debug_mode:
@@ -339,7 +340,7 @@ async def run_and_complete(
             else:
                 logging.warning(f"Job `{job_name}` timed out after {timeout_minutes} minutes")
         except Exception as ex:
-            run_status, run_conclusion = GitHubRunStatus.COMPLETED, GitHubRunConclusion.FAILURE
+            run_status, run_conclusion = GitHubRunStatus.COMPLETED, GitHubRunConclusion.ACTION_REQUIRED
             summary = f"Job `{job_name}` failed due to an unexpected error: {ex!s}"
             if debug_mode:
                 results = f"{ex!s}"
@@ -349,8 +350,7 @@ async def run_and_complete(
     logging.info(
         f"Job finished with {run_conclusion} >>> {url_job or (url_job_table + ' search for name ' + job_name)}"
     )
-    if len(results) > MAX_OUTPUT_LENGTH:
-        results = results[: MAX_OUTPUT_LENGTH - 20] + "\n…(truncated)"
+    results = wrap_long_text(results, text_length=MAX_OUTPUT_LENGTH - 20)  # wrap the results to fit in the output
     await fn_patch_check_run(
         data={
             "status": run_status.value,
