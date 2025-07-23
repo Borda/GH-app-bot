@@ -3,10 +3,10 @@ import hashlib
 import itertools
 import logging
 import os
-import textwrap
 import time
 import zipfile
 from pathlib import Path
+from textwrap import TextWrapper
 
 import yaml
 
@@ -232,14 +232,20 @@ def extract_zip_archive(zip_path: Path, extract_to: Path, subfolder: str = "") -
 def wrap_long_lines(text: str, width: int = 200) -> str:
     """Wrap long lines in the text to a specified width, using '>' as the continuation symbol.
 
-    >>> wrap_long_lines("This is a very long line that should be wrapped to fit within 20 characters.", width=20)
-    'This is a very long\n↪ line that should\n↪ be wrapped to fit\n↪ within 20\n↪ characters.'
+    >>> my_text = '''Well, well, well, what do we have here?
+    ... This is a very long line that should be wrapped to fit within N characters.
+    ... It should also handle multiple lines correctly.
+    ... '''
+    >>> print(wrap_long_lines(my_text, width=56))
+    Well, well, well, what do we have here?
+    This is a very long line that should be wrapped to fit
+    ↪ within N characters.
+    It should also handle multiple lines correctly.
     """
-    return "\n".join(
-        textwrap.wrap(
-            text,
-            width=width,
-            replace_whitespace=False,
-            subsequent_indent="↪ "  # Unicode character for right arrow with hook (↪️
-        )
+    wrapper = TextWrapper(
+        width=width,
+        replace_whitespace=False,
+        subsequent_indent="↪ ",  # Unicode character for right arrow with hook (↪️
     )
+    lines = [wrapper.fill(line) for line in text.splitlines()]
+    return "\n".join(lines)

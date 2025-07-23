@@ -91,7 +91,7 @@ async def run_repo_job(
         " -w /workspace"
         f" {with_gpus} {docker_run_image}"
         f" bash -eo pipefail {script_file} || rc=$? ; "
-        f"echo \"{exit_hash}\n$rc\n{exit_hash}\" ; "
+        f'echo "{exit_hash}\n$rc\n{exit_hash}" ; '
     )
     logging.debug(f"job >> {job_cmd}")
 
