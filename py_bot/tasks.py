@@ -7,7 +7,7 @@ from typing import Any
 
 from lightning_sdk import Job, Machine, Status
 
-from py_bot.utils import generate_unique_hash, to_bool
+from py_bot.utils import generate_unique_hash, sanitize_params_for_env, to_bool
 
 BASH_BOX_FUNC = textwrap.dedent("""\
 box(){
@@ -60,7 +60,7 @@ async def run_repo_job(
     docker_run_machine = Machine.from_str(params.get("machine") or config.get("machine", "CPU"))
     docker_run_image = params.get("image") or config.get("image", "ubuntu:22.04")
     config_env = config.get("env", {})
-    config_env.update(params)  # add params to env
+    config_env.update(sanitize_params_for_env(params))  # add params to env
 
     # prepare the environment variables to export
     export_envs = "\n".join([f"export {k}={shlex.quote(str(v))}" for k, v in config_env.items()])

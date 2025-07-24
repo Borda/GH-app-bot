@@ -3,6 +3,7 @@ import hashlib
 import itertools
 import logging
 import os
+import re
 import time
 import zipfile
 from pathlib import Path
@@ -253,3 +254,20 @@ def wrap_long_text(text: str, line_width: int = 200, text_length: int = 65525) -
         lines_truncated = text_wrapped.splitlines()
         text_wrapped = "\n".join(lines_truncated[:-1] + ["…(truncated)"])
     return text_wrapped
+
+
+def sanitize_params_for_env(params: dict) -> dict:
+    """Sanitize parameters for use in environment variables.
+
+    Replaces any character that is not a letter, number, or underscore with an underscore.
+
+    >>> sanitize_params_for_env({"key 1": "value1", "key-2": "value2"})
+    {'key_1': 'value1', 'key_2': 'value2'}
+    """
+    sanitized_params = {}
+    for key, value in params.items():
+        if not isinstance(key, str):
+            raise ValueError(f"Parameter keys must be strings, got {type(key).__name__}.")
+        sanitized_key = re.sub(r"\W", "_", key)
+        sanitized_params[sanitized_key] = value
+    return sanitized_params
