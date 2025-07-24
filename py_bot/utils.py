@@ -236,10 +236,12 @@ def wrap_long_text(text: str, line_width: int = 200, text_length: int = 65525) -
     >>> my_text = '''Well, well, well, what do we have here?
     ... This is a very long line that should be wrapped to fit within N characters.
     ... It should also handle multiple lines correctly.
+    ... This is another line will be truncated as it exceeds the specified text length limit.
     ... '''
-    >>> print(wrap_long_text(my_text, line_width=56, text_length=100))
+    >>> print(wrap_long_text(my_text, line_width=56, text_length=150))
     Well, well, well, what do we have here?
     This is a very long line that should be wrapped to fit
+    ↪ within N characters.
     …(truncated)
     """
     wrapper = TextWrapper(

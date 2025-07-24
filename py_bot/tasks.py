@@ -7,6 +7,7 @@ from typing import Any
 
 from lightning_sdk import Job, Machine, Status
 
+from py_bot.downloads import _RELATIVE_PATH_DOWNLOAD
 from py_bot.utils import generate_unique_hash, sanitize_params_for_env, to_bool
 
 BASH_BOX_FUNC = textwrap.dedent("""\
@@ -80,7 +81,7 @@ async def run_repo_job(
     job_cmd = (
         "set -e ; "
         "printenv ; "
-        "python GH-app-bot/py_bot/downloads.py ; "
+        f"python {_RELATIVE_PATH_DOWNLOAD} ; "
         f"PATH_REPO_TEMP=$(realpath {temp_repo_folder}) ; "
         f"cat > $PATH_REPO_TEMP/{script_file} << 'EOF' ;\n"
         f"{script_content}\n"

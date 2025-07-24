@@ -6,6 +6,10 @@ from pathlib import Path
 
 import aiohttp
 
+_PATH_DOWNLOAD_PARTS = Path(__file__).resolve().parts
+# extracting the relative path as GH-app-bot/py_bot/downloads.py
+_RELATIVE_PATH_DOWNLOAD = os.path.join(*_PATH_DOWNLOAD_PARTS[-3:])
+
 
 async def download_repo_archive(
     repo_owner: str, repo_name: str, git_ref: str, token: str, folder_path: str | Path, suffix: str = ""
