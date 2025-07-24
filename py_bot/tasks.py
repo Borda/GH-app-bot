@@ -102,7 +102,7 @@ async def run_repo_job(
         name=job_name,
         command=job_cmd,
         machine=docker_run_machine,
-        interruptible=to_bool(config.get("interruptible", True)),
+        interruptible=to_bool(config.get("interruptible", False)),
         env={
             "LIGHTNING_DEBUG": "1",
             "GITHUB_REPOSITORY_OWNER": config.get("repository_owner", ""),
