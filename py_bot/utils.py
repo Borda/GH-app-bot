@@ -19,18 +19,20 @@ def generate_matrix_from_config(config_parametrize: dict) -> list:
 
     >>> config_multi = {
     ...     "matrix": {
-    ...         "python": ["3.10", "3.11"],
-    ...         "os": ["ubuntu", "windows"]
+    ...         "image": ["ubuntu", "windows"],
+    ...         "python": ["3.10", "3.11"]
     ...     },
-    ...     "include": [{"python": "3.9", "os": "ubuntu"}],
-    ...     "exclude": [{"python": "3.10", "os": "windows"}]
+    ...     "include": [{"python": "3.9", "image": "ubuntu"}],
+    ...     "exclude": [{"python": "3.10", "image": "windows"}]
     ... }
-    >>> result = generate_matrix_from_config(config_multi)
-    >>> len(result)
+    >>> params = generate_matrix_from_config(config_multi)
+    >>> len(params)
     4
-    >>> {"python": "3.9", "os": "ubuntu"} in result
+    >>> {"python": "3.11", "image": "windows"} in params
     True
-    >>> {"python": "3.10", "os": "windows"} in result
+    >>> {"python": "3.9", "image": "ubuntu"} in params
+    True
+    >>> {"python": "3.10", "image": "windows"} in params
     False
 
     >>> empty_config = {}
@@ -55,15 +57,12 @@ def generate_matrix_from_config(config_parametrize: dict) -> list:
             all_combinations.append(dict(zip(keys, combination)))
 
     # Add include items
-    if include:
-        if any(not isinstance(item, dict) for item in include):
+    for item in include:
+        if not isinstance(item, dict):
             raise ValueError("Include items must be dictionaries.")
-        for item in include:
-            if any(k in _RESTRICTED_PARAMETERS for k in item):
-                raise ValueError(
-                    f"Parameters {', '.join(_RESTRICTED_PARAMETERS)} are not allowed in the include items."
-                )
-            all_combinations.append(item)
+        if any(k in _RESTRICTED_PARAMETERS for k in item):
+            raise ValueError(f"Parameters {', '.join(_RESTRICTED_PARAMETERS)} are not allowed in the include items.")
+        all_combinations.append(item)
 
     # Remove exclude items
     if not exclude:
