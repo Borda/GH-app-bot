@@ -4,7 +4,7 @@ import logging
 import shutil
 from collections.abc import Callable
 from enum import Enum
-from functools import partial
+from functools import lru_cache, partial
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +23,12 @@ STATUS_RUNNING_OR_FINISHED = {Status.Running, Status.Stopping, Status.Completed,
 MAX_OUTPUT_LENGTH = 65525  # GitHub API limit for check-run output.text
 LOCAL_ROOT_DIR = Path(__file__).parent
 LOCAL_TEMP_DIR = LOCAL_ROOT_DIR / ".temp"
+
+
+@lru_cache
+def this_teamspace() -> Teamspace:
+    """Get the current Teamspace instance."""
+    return Teamspace()
 
 
 class GitHubRunStatus(Enum):
@@ -105,8 +111,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
         branch_ref = event.data["pull_request"]["base"]["ref"]
     repo_owner = event.data["repository"]["owner"]["login"]
     repo_name = event.data["repository"]["name"]
-    this_teamspace = Teamspace()
-    link_lightning_jobs = f"{LIGHTNING_CLOUD_URL}/{this_teamspace.owner.name}/{this_teamspace.name}/jobs/"
+    link_lightning_jobs = f"{LIGHTNING_CLOUD_URL}/{this_teamspace().owner.name}/{this_teamspace().name}/jobs/"
     # Create a partial function for posting check runs
     post_check = partial(post_with_retry, gh=gh, url=f"/repos/{repo_owner}/{repo_name}/check-runs")
     configs, config_error = [], None
@@ -255,14 +260,15 @@ async def run_and_complete(
     """Run a job and update the check run status."""
     debug_mode = config.get("mode", "info") == "debug"
     # define initial values
-    this_teamspace = Teamspace()
     summary = ""  # Summary of the job's execution
     results = ""  # Full output of the job, if any
     job = None  # Placeholder for the job object
     run_status = GitHubRunStatus.QUEUED
     run_conclusion = GitHubRunConclusion.NEUTRAL
     url_job = ""  # URL to the job in Lightning Cloud
-    url_job_table = f"{LIGHTNING_CLOUD_URL}/{this_teamspace.owner.name}/{this_teamspace.name}/jobs/"  # Link to all jobs
+    url_job_table = (
+        f"{LIGHTNING_CLOUD_URL}/{this_teamspace().owner.name}/{this_teamspace().name}/jobs/"  # Link to all jobs
+    )
     logs_separator, exit_separator = "", ""  # String used for cutoff processing
 
     try:
