@@ -10,7 +10,7 @@ This guide helps you set up a GitHub App that listens to Pull Requests and trigg
 The included bot is launched via:
 
 ```bash
-python -m py_bot
+python -m bot_async_tasks
 ```
 
 ______________________________________________________________________
@@ -105,7 +105,7 @@ ______________________________________________________________________
 Start the bot using:
 
 ```bash
-python -m py_bot
+python -m bot_async_tasks
 ```
 
 Push or update a PR to your target repo—you should see:

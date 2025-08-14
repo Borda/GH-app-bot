@@ -7,7 +7,7 @@ from pathlib import Path
 import aiohttp
 
 _PATH_DOWNLOAD_PARTS = Path(__file__).resolve().parts
-# extracting the relative path as GH-app-bot/py_bot/downloads.py
+# extracting the relative path as GH-app-bot/bot_async_tasks/downloads.py
 _RELATIVE_PATH_DOWNLOAD = os.path.join(*_PATH_DOWNLOAD_PARTS[-3:])
 
 

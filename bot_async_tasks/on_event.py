@@ -13,9 +13,9 @@ from gidgethub.aiohttp import GitHubAPI
 from lightning_sdk import Status, Teamspace
 from lightning_sdk.lightning_cloud.env import LIGHTNING_CLOUD_URL
 
-from py_bot.downloads import download_repo_and_extract
-from py_bot.tasks import finalize_job, run_repo_job
-from py_bot.utils import generate_matrix_from_config, is_triggered_by_event, load_configs_from_folder, wrap_long_text
+from bot_async_tasks.downloads import download_repo_and_extract
+from bot_async_tasks.tasks import finalize_job, run_repo_job
+from bot_async_tasks.utils import generate_matrix_from_config, is_triggered_by_event, load_configs_from_folder, wrap_long_text
 
 JOB_QUEUE_TIMEOUT = 60 * 60  # 1 hour
 JOB_QUEUE_INTERVAL = 10  # 10 seconds

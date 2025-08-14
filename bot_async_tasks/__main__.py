@@ -6,8 +6,8 @@ from pathlib import Path
 from aiohttp import web
 from gidgethub import routing
 
-from py_bot.handling import handle_with_offloaded_tasks
-from py_bot.on_event import on_code_changed
+from bot_async_tasks.handling import handle_with_offloaded_tasks
+from bot_async_tasks.on_event import on_code_changed
 
 
 def _load_validate_required_env_vars() -> tuple[str, str, str]:

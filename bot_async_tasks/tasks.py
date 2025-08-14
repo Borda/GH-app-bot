@@ -7,8 +7,8 @@ from typing import Any
 
 from lightning_sdk import Job, Machine, Status
 
-from py_bot.downloads import _RELATIVE_PATH_DOWNLOAD
-from py_bot.utils import generate_unique_hash, sanitize_params_for_env, to_bool
+from bot_async_tasks.downloads import _RELATIVE_PATH_DOWNLOAD
+from bot_async_tasks.utils import generate_unique_hash, sanitize_params_for_env, to_bool
 
 BASH_BOX_FUNC = textwrap.dedent("""\
 box(){
