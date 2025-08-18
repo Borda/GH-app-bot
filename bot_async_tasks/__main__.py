@@ -1,30 +1,12 @@
 import logging
-import os
 from functools import partial
-from pathlib import Path
 
 from aiohttp import web
 from gidgethub import routing
 
 from bot_async_tasks.handling import handle_with_offloaded_tasks
 from bot_async_tasks.on_event import on_code_changed
-
-
-def _load_validate_required_env_vars() -> tuple[str, str, str]:
-    """Ensure required environment variables are set."""
-    github_app_id = os.getenv("GITHUB_APP_ID")
-    assert github_app_id, "`GITHUB_APP_ID` must be set in environment variables"
-    private_key = os.getenv("PRIVATE_KEY")
-    if not private_key:
-        # If PRIVATE_KEY is not set, read from a file specified by PRIVATE_KEY_PATH
-        private_key_path = os.getenv("PRIVATE_KEY_PATH")
-        assert private_key_path, "`PRIVATE_KEY_PATH` must be set in environment variables"
-        private_key_path = Path(private_key_path).expanduser().resolve()
-        assert private_key_path.is_file(), f"Private key file not found at {private_key_path}"
-        private_key = private_key_path.read_text()
-    webhook_secret = os.getenv("WEBHOOK_SECRET", "")
-    return github_app_id, private_key, webhook_secret
-
+from bot_commons.utils import _load_validate_required_env_vars
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")

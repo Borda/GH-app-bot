@@ -136,3 +136,19 @@ def sanitize_params_for_env(params: dict) -> dict:
         sanitized_key = re.sub(r"\W", "_", key)
         sanitized_params[sanitized_key] = value
     return sanitized_params
+
+
+def _load_validate_required_env_vars() -> tuple[str, str, str]:
+    """Ensure required environment variables are set."""
+    github_app_id = os.getenv("GITHUB_APP_ID")
+    assert github_app_id, "`GITHUB_APP_ID` must be set in environment variables"
+    private_key = os.getenv("PRIVATE_KEY")
+    if not private_key:
+        # If PRIVATE_KEY is not set, read from a file specified by PRIVATE_KEY_PATH
+        private_key_path = os.getenv("PRIVATE_KEY_PATH")
+        assert private_key_path, "`PRIVATE_KEY_PATH` must be set in environment variables"
+        private_key_path = Path(private_key_path).expanduser().resolve()
+        assert private_key_path.is_file(), f"Private key file not found at {private_key_path}"
+        private_key = private_key_path.read_text()
+    webhook_secret = os.getenv("WEBHOOK_SECRET", "")
+    return github_app_id, private_key, webhook_secret

@@ -14,8 +14,8 @@ from lightning_sdk import Status, Teamspace
 from lightning_sdk.lightning_cloud.env import LIGHTNING_CLOUD_URL
 
 from bot_async_tasks.downloads import download_repo_and_extract
-from bot_async_tasks.tasks import finalize_job, run_repo_job
 from bot_commons.configs import ConfigFile, ConfigRun, ConfigWorkflow
+from bot_commons.lit_job import finalize_job, run_repo_job
 from bot_commons.utils import (
     wrap_long_text,
 )
