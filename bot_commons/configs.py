@@ -168,7 +168,7 @@ class ConfigRun:
 
     def __init__(self, config: ConfigWorkflow, params: dict):
         self._data = deepcopy(config._data)
-        self.params = {k: v for k, v in params if k not in ConfigWorkflow._RESTRICTED_PARAMETERS}
+        self.params = {k: v for k, v in params.items() if k not in ConfigWorkflow._RESTRICTED_PARAMETERS}
 
     @property
     def name(self) -> str:
