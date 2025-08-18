@@ -108,7 +108,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
     # figure out the commit SHA and branch ref
     if event.event == "push":
         head_sha = event.data["after"]
-        branch_ref = event.data["ref"][len("refs/heads/"):]
+        branch_ref = event.data["ref"][len("refs/heads/") :]
     else:  # pull_request
         head_sha = event.data["pull_request"]["head"]["sha"]
         branch_ref = event.data["pull_request"]["base"]["ref"]
