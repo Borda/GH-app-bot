@@ -322,10 +322,10 @@ async def run_and_complete(
                 "details_url": url_job or url_job_table,
             },
         )
-        timeout_minutes = 60  # the default timeout is 60 minutes
         try:
-            timeout_minutes = float(config.get("timeout", timeout_minutes))  # the default timeout is 60 minutes
-            await job.async_wait(timeout=timeout_minutes * 60, stop_on_timeout=True)  # wait for the job to finish
+            await job.async_wait(
+                timeout=config_run.timeout_minutes * 60, stop_on_timeout=True
+            )  # wait for the job to finish
             job_status, exit_code, results = finalize_job(
                 job, logs_hash=logs_separator, exit_hash=exit_separator, debug=debug_mode
             )
@@ -339,11 +339,11 @@ async def run_and_complete(
             summary = f"Job `{job_name}` finished as {job_status} with exit code {exit_code}."
         except TimeoutError:
             run_status, run_conclusion = GitHubRunStatus.COMPLETED, GitHubRunConclusion.CANCELLED
-            summary = f"Job `{job_name}` cancelled due to timeout after {timeout_minutes} minutes."
+            summary = f"Job `{job_name}` cancelled due to timeout after {config_run.timeout_minutes} minutes."
             if debug_mode:
                 results = "Job timed out, no results available."
             else:
-                logging.warning(f"Job `{job_name}` timed out after {timeout_minutes} minutes")
+                logging.warning(f"Job `{job_name}` timed out after {config_run.timeout_minutes} minutes")
         except Exception as ex:
             run_status, run_conclusion = GitHubRunStatus.COMPLETED, GitHubRunConclusion.ACTION_REQUIRED
             summary = f"Job `{job_name}` failed due to an unexpected error: {ex!s}"

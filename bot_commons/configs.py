@@ -1,9 +1,9 @@
 import glob
 import itertools
 import logging
+from collections.abc import Generator
 from copy import deepcopy
 from pathlib import Path
-from typing import Union, Generator
 
 import yaml
 
@@ -127,7 +127,8 @@ class ConfigWorkflow:
                 raise ValueError("Include items must be dictionaries.")
             if any(k in ConfigWorkflow._RESTRICTED_PARAMETERS for k in item):
                 raise ValueError(
-                    f"Parameters {', '.join(ConfigWorkflow._RESTRICTED_PARAMETERS)} are not allowed in the include items."
+                    f"Parameters {', '.join(ConfigWorkflow._RESTRICTED_PARAMETERS)}"
+                    " are not allowed in the include items."
                 )
             all_combinations.append(item)
 
@@ -195,6 +196,11 @@ class ConfigRun:
     def interruptible(self) -> bool:
         """Get the interruptible flag."""
         return to_bool(self.params.get("interruptible") or self._data.get("interruptible", False))
+
+    @property
+    def timeout_minutes(self) -> float:
+        """Get the timeout flag."""
+        return float(self.params.get("timeout") or self._data.get("timeout", 60))
 
     @property
     def repository_owner(self) -> str:
