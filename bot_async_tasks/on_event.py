@@ -191,7 +191,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
                         "output": {
                             "title": "Skipped",
                             "summary": f"Configuration `{cfg_file.name}` is not triggered"
-                            f" by the event `{event.event}` on branch `{branch_ref}` (with {config.trigger}).",
+                            f" by the event `{event.event}` on branch `{branch_ref}` (with `{config.trigger}`).",
                         },
                     },
                 )
