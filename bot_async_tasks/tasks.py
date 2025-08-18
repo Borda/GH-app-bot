@@ -8,9 +8,8 @@ from typing import Any
 from lightning_sdk import Job, Machine, Status
 
 from bot_async_tasks.downloads import _RELATIVE_PATH_DOWNLOAD
-from bot_commons.utils import generate_unique_hash
-
 from bot_commons.configs import ConfigRun
+from bot_commons.utils import generate_unique_hash
 
 BASH_BOX_FUNC = textwrap.dedent("""\
 box(){
@@ -53,9 +52,7 @@ async def run_sleeping_task(*args: Any, **kwargs: Any):
     return True
 
 
-async def run_repo_job(
-    cfg_file_name: str, config_run: ConfigRun, token: str, job_name: str
-) -> tuple[Job, str, str]:
+async def run_repo_job(cfg_file_name: str, config_run: ConfigRun, token: str, job_name: str) -> tuple[Job, str, str]:
     """Download the full repo at `ref` into a tempdir, look for config and execute the job."""
     # mandatory
     assert config_run.run

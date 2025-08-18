@@ -12,6 +12,7 @@ from bot_commons.utils import sanitize_params_for_env, to_bool
 
 class ConfigWorkflow:
     """Configuration for a run, including matrix generation."""
+
     _RESTRICTED_PARAMETERS = ("env", "run")
     _data: dict
 
@@ -32,8 +33,7 @@ class ConfigWorkflow:
         """Check if the event is triggered by a code change."""
         return self._is_triggered_by_event(event, branch, self._data.get("trigger"))
 
-    def append_repo_details(self,
-            repo_owner: str, repo_name: str, head_sha: str, branch_ref: str) -> None:
+    def append_repo_details(self, repo_owner: str, repo_name: str, head_sha: str, branch_ref: str) -> None:
         """Append repository details to the configuration."""
         self._data.update({
             "repository_owner": repo_owner,
@@ -112,7 +112,9 @@ class ConfigWorkflow:
             # Get all matrix keys and their values
             keys = list(matrix.keys())
             if any(key in ConfigWorkflow._RESTRICTED_PARAMETERS for key in keys):
-                raise ValueError(f"Parameters {', '.join(ConfigWorkflow._RESTRICTED_PARAMETERS)} are not allowed in the matrix.")
+                raise ValueError(
+                    f"Parameters {', '.join(ConfigWorkflow._RESTRICTED_PARAMETERS)} are not allowed in the matrix."
+                )
             values = list(matrix.values())
 
             # Generate all combinations
@@ -125,7 +127,8 @@ class ConfigWorkflow:
                 raise ValueError("Include items must be dictionaries.")
             if any(k in ConfigWorkflow._RESTRICTED_PARAMETERS for k in item):
                 raise ValueError(
-                    f"Parameters {', '.join(ConfigWorkflow._RESTRICTED_PARAMETERS)} are not allowed in the include items.")
+                    f"Parameters {', '.join(ConfigWorkflow._RESTRICTED_PARAMETERS)} are not allowed in the include items."
+                )
             all_combinations.append(item)
 
         # Remove exclude items
@@ -153,6 +156,7 @@ class ConfigWorkflow:
 
 class ConfigRun:
     """Configuration for a run, including matrix generation."""
+
     _data: dict
     params: dict
 
@@ -212,6 +216,7 @@ class ConfigRun:
         """Get the debug flag."""
         return to_bool(self._data.get("mode", "info"))
 
+
 class ConfigFile:
     """Configuration file representation."""
 
@@ -219,7 +224,7 @@ class ConfigFile:
     name: str
     body: dict
 
-    def __init__(self, path: Union[str, Path]):
+    def __init__(self, path: str | Path):
         self.path = Path(path)
         self.name = self.path.name
         try:  # todo: add specific exception and yaml validation

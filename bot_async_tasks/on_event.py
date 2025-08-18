@@ -12,12 +12,13 @@ from aiohttp import ClientSession, ClientTimeout, client_exceptions
 from gidgethub.aiohttp import GitHubAPI
 from lightning_sdk import Status, Teamspace
 from lightning_sdk.lightning_cloud.env import LIGHTNING_CLOUD_URL
-from setuptools.command.setopt import config_file
 
 from bot_async_tasks.downloads import download_repo_and_extract
 from bot_async_tasks.tasks import finalize_job, run_repo_job
-from bot_commons.utils import generate_matrix_from_config, is_triggered_by_event, load_configs_from_folder, wrap_long_text
-from bot_commons.configs import ConnfigFile, ConfigWorkflow, ConfigFile, ConfigRun
+from bot_commons.configs import ConfigFile, ConfigRun, ConfigWorkflow
+from bot_commons.utils import (
+    wrap_long_text,
+)
 
 JOB_QUEUE_TIMEOUT = 60 * 60  # 1 hour
 JOB_QUEUE_INTERVAL = 10  # 10 seconds
@@ -201,7 +202,9 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
             )
             continue
         for config_run in config.generate_runs():
-            task_name = f"{cfg_file.name} / {config_run.name} ({', '.join([p or 'n/a' for p in config_run.params.values()])})"
+            task_name = (
+                f"{cfg_file.name} / {config_run.name} ({', '.join([p or 'n/a' for p in config_run.params.values()])})"
+            )
             logging.debug(f"=> pull_request: synchronize -> {task_name=}")
             # Create a check run
             check = await post_check(
@@ -223,7 +226,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
                         job_name=job_name,
                         cfg_file_name=cfg_file.name,
                         config_run=config_run,
-                        token=token
+                        token=token,
                     )
                 )
             )
@@ -273,10 +276,7 @@ async def run_and_complete(
 
     try:
         job, logs_separator, exit_separator = await run_repo_job(
-            cfg_file_name=cfg_file_name,
-            config_run=config_run,
-            token=token,
-            job_name=job_name
+            cfg_file_name=cfg_file_name, config_run=config_run, token=token, job_name=job_name
         )
     except Exception as ex:
         run_status, run_conclusion = GitHubRunStatus.COMPLETED, GitHubRunConclusion.FAILURE
