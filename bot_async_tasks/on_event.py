@@ -12,10 +12,12 @@ from aiohttp import ClientSession, ClientTimeout, client_exceptions
 from gidgethub.aiohttp import GitHubAPI
 from lightning_sdk import Status, Teamspace
 from lightning_sdk.lightning_cloud.env import LIGHTNING_CLOUD_URL
+from setuptools.command.setopt import config_file
 
 from bot_async_tasks.downloads import download_repo_and_extract
 from bot_async_tasks.tasks import finalize_job, run_repo_job
-from bot_async_tasks.utils import generate_matrix_from_config, is_triggered_by_event, load_configs_from_folder, wrap_long_text
+from bot_commons.utils import generate_matrix_from_config, is_triggered_by_event, load_configs_from_folder, wrap_long_text
+from bot_commons.configs import ConnfigFile, ConfigWorkflow, ConfigFile, ConfigRun
 
 JOB_QUEUE_TIMEOUT = 60 * 60  # 1 hour
 JOB_QUEUE_INTERVAL = 10  # 10 seconds
@@ -114,7 +116,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
     link_lightning_jobs = f"{LIGHTNING_CLOUD_URL}/{this_teamspace().owner.name}/{this_teamspace().name}/jobs/"
     # Create a partial function for posting check runs
     post_check = partial(post_with_retry, gh=gh, url=f"/repos/{repo_owner}/{repo_name}/check-runs")
-    configs, config_error = [], None
+    config_files, config_error = [], None
 
     # 1) Download the repository at the specified ref
     repo_dir = await download_repo_and_extract(
@@ -134,7 +136,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
         repo_dir = Path(repo_dir).resolve()
         config_dir = repo_dir / ".lightning" / "workflows"
         try:
-            configs = load_configs_from_folder(config_dir)
+            config_files = ConfigFile.load_from_folder(config_dir)
         except Exception as ex:
             config_error = ex
         finally:
@@ -144,7 +146,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
         config_dir = None
         logging.warn(f"Failed to extract `.lightning` folder from repo {repo_owner}/{repo_name} at {head_sha}")
 
-    if not configs:
+    if not config_files:
         logging.warn(f"No valid configs found in {config_dir}")
         text_error = f"```console\n{config_error!s}\n```" if config_error else "No specific error details available."
         await post_check(
@@ -165,41 +167,41 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
 
     # 3) Launch check runs for each job
     tasks = []
-    for cfg_file_name, config in configs:
-        config.update({  # add some extra info to the config
-            "repository_owner": repo_owner,
-            "repository_name": repo_name,
-            "repository_ref": head_sha,
-        })
-        cfg_name = config.get("name", "Lit Job")
-        cfg_trigger = config.get("trigger", {})
-        if not is_triggered_by_event(event=event.event, branch=branch_ref, trigger=cfg_trigger):
-            if event.event in config.get("trigger", []):
+    for cfg_file in config_files:
+        config = ConfigWorkflow(cfg_file.body)
+        config.append_repo_details(
+            repo_owner=repo_owner,
+            repo_name=repo_name,
+            head_sha=head_sha,
+            branch_ref=branch_ref,
+        )
+        # cfg_name = cfg_file.get("name", "Lit Job")
+        # cfg_trigger = cfg_file.get("trigger", {})
+        if not config.is_triggered_by_event(event=event.event, branch=branch_ref):
+            if event.event in config.trigger:
                 # there is a trigger for this event, but it is not matched
                 await post_check(
                     data={
-                        "name": f"{cfg_file_name} / {cfg_name} [{event.event}]",
+                        "name": f"{cfg_file.name} / {config.name} [{event.event}]",
                         "head_sha": head_sha,
                         "status": "completed",
                         "conclusion": "skipped",
                         "started_at": datetime.datetime.utcnow().isoformat() + "Z",
                         "output": {
                             "title": "Skipped",
-                            "summary": f"Configuration `{cfg_file_name}` is not triggered"
-                            f" by the event `{event.event}` on branch `{branch_ref}` (with {cfg_trigger}).",
+                            "summary": f"Configuration `{cfg_file.name}` is not triggered"
+                            f" by the event `{event.event}` on branch `{branch_ref}` (with {config.trigger}).",
                         },
                     },
                 )
             # skip this config if it is not triggered by the event
             logging.info(
-                f"Skipping config {cfg_file_name} for event {event.event} on branch {branch_ref}"
-                f" because it is not triggered by this event with {cfg_trigger}."
+                f"Skipping config {cfg_file.name} for event {event.event} on branch {branch_ref}"
+                f" because it is not triggered by this event with {config.trigger}."
             )
             continue
-        parameters = generate_matrix_from_config(config.get("parametrize", {}))
-        for _, params in enumerate(parameters):
-            name = params.get("name") or cfg_name
-            task_name = f"{cfg_file_name} / {name} ({', '.join([p or 'n/a' for p in params.values()])})"
+        for config_run in config.generate_runs():
+            task_name = f"{cfg_file.name} / {config_run.name} ({', '.join([p or 'n/a' for p in config_run.params.values()])})"
             logging.debug(f"=> pull_request: synchronize -> {task_name=}")
             # Create a check run
             check = await post_check(
@@ -219,10 +221,9 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
                     run_and_complete(
                         fn_patch_check_run=patch_this_check_run,
                         job_name=job_name,
-                        cfg_file_name=cfg_file_name,
-                        config=config,
-                        params=params,
-                        token=token,
+                        cfg_file_name=cfg_file.name,
+                        config_run=config_run,
+                        token=token
                     )
                 )
             )
@@ -253,12 +254,11 @@ async def run_and_complete(
     fn_patch_check_run: Callable,
     job_name: str,
     cfg_file_name: str,
-    config: dict,
-    params: dict,
+    config_run: ConfigRun,
     token: str,
 ) -> GitHubRunConclusion:
     """Run a job and update the check run status."""
-    debug_mode = config.get("mode", "info") == "debug"
+    debug_mode = config_run.mode == "debug"
     # define initial values
     summary = ""  # Summary of the job's execution
     results = ""  # Full output of the job, if any
@@ -274,10 +274,9 @@ async def run_and_complete(
     try:
         job, logs_separator, exit_separator = await run_repo_job(
             cfg_file_name=cfg_file_name,
-            config=config,
-            params=params,
+            config_run=config_run,
             token=token,
-            job_name=job_name,
+            job_name=job_name
         )
     except Exception as ex:
         run_status, run_conclusion = GitHubRunStatus.COMPLETED, GitHubRunConclusion.FAILURE
