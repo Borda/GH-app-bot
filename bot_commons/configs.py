@@ -218,9 +218,9 @@ class ConfigRun:
         return self._data.get("repository_ref")
 
     @property
-    def mode(self) -> bool:
-        """Get the debug flag."""
-        return to_bool(self._data.get("mode", "info"))
+    def mode(self) -> str:
+        """The mode can be 'info' or 'debug'."""
+        return self._data.get("mode", "info")
 
 
 class ConfigFile:
