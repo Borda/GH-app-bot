@@ -8,7 +8,8 @@ from typing import Any
 from lightning_sdk import Job, Machine, Status
 
 from bot_async_tasks.downloads import _RELATIVE_PATH_DOWNLOAD
-from bot_async_tasks.utils import generate_unique_hash, sanitize_params_for_env, to_bool
+from bot_commons.configs import ConfigRun
+from bot_commons.utils import generate_unique_hash
 
 BASH_BOX_FUNC = textwrap.dedent("""\
 box(){
@@ -51,23 +52,18 @@ async def run_sleeping_task(*args: Any, **kwargs: Any):
     return True
 
 
-async def run_repo_job(
-    cfg_file_name: str, config: dict, params: dict, token: str, job_name: str
-) -> tuple[Job, str, str]:
+async def run_repo_job(cfg_file_name: str, config_run: ConfigRun, token: str, job_name: str) -> tuple[Job, str, str]:
     """Download the full repo at `ref` into a tempdir, look for config and execute the job."""
     # mandatory
-    config_run = config["run"]
+    assert config_run.run
     # optional
-    docker_run_machine = Machine.from_str(params.get("machine") or config.get("machine", "CPU"))
-    docker_run_image = params.get("image") or config.get("image", "ubuntu:22.04")
-    config_env = config.get("env", {})
-    config_env.update(sanitize_params_for_env(params))  # add params to env
+    docker_run_machine = Machine.from_str(config_run.machine)
 
     # prepare the environment variables to export
-    export_envs = "\n".join([f"export {k}={shlex.quote(str(v))}" for k, v in config_env.items()])
+    export_envs = "\n".join([f"export {k}={shlex.quote(str(v))}" for k, v in config_run.env.items()])
 
     # 1) List the commands you want to run inside the box
-    job_hash = generate_unique_hash(16, params=params)
+    job_hash = generate_unique_hash(16, params=config_run.params)
     logs_hash = ("%" * 20) + f"_RUN-LOGS-{generate_unique_hash(32)}_" + ("%" * 20)
     exit_hash = ("%" * 20) + f"_EXIT-CODE-{generate_unique_hash(32)}_" + ("%" * 20)
 
@@ -92,7 +88,7 @@ async def run_repo_job(
         "docker run --rm -i"
         " -v ${PATH_REPO_TEMP}:/workspace"
         " -w /workspace"
-        f" {with_gpus} {docker_run_image}"
+        f" {with_gpus} {config_run.image}"
         f" bash -eo pipefail {script_file} || rc=$? ; "
         f'echo "{exit_hash}\n$rc\n{exit_hash}" ; '
     )
@@ -103,12 +99,12 @@ async def run_repo_job(
         name=job_name,
         command=job_cmd,
         machine=docker_run_machine,
-        interruptible=to_bool(config.get("interruptible", False)),
+        interruptible=config_run.interruptible,
         env={
             "LIGHTNING_DEBUG": "1",
-            "GITHUB_REPOSITORY_OWNER": config.get("repository_owner", ""),
-            "GITHUB_REPOSITORY_NAME": config.get("repository_name", ""),
-            "GITHUB_REPOSITORY_REF": config.get("repository_ref", ""),
+            "GITHUB_REPOSITORY_OWNER": config_run.repository_owner,
+            "GITHUB_REPOSITORY_NAME": config_run.repository_name,
+            "GITHUB_REPOSITORY_REF": config_run.repository_ref,
             "GITHUB_TOKEN": token,
             "PATH_REPO_FOLDER": temp_repo_folder,
         },
