@@ -118,6 +118,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
     # Create a partial function for posting check runs
     post_check = partial(post_with_retry, gh=gh, url=f"/repos/{repo_owner}/{repo_name}/check-runs")
     config_files, config_error = [], None
+    log_prefix = f"{repo_owner}/{repo_name}::{head_sha[:7]}::{event.event}::\t"
 
     # 1) Download the repository at the specified ref
     repo_dir = await download_repo_and_extract(
@@ -133,7 +134,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
 
     # 2) Read the config file
     if repo_dir and repo_dir.is_dir():
-        logging.info(f"Downloaded repo {repo_owner}/{repo_name} at {head_sha} to {repo_dir}")
+        logging.info(log_prefix + f"Downloaded repo to {repo_dir}")
         repo_dir = Path(repo_dir).resolve()
         config_dir = repo_dir / ".lightning" / "workflows"
         try:
@@ -141,14 +142,14 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
         except Exception as ex:
             config_error = ex
         finally:
-            logging.info(f"Cleaning up the repo directory: {repo_dir}")
+            logging.info(log_prefix + f"Cleaning up the repo directory: {repo_dir}")
             shutil.rmtree(repo_dir, ignore_errors=True)
     else:
         config_dir = None
-        logging.warn(f"Failed to extract `.lightning` folder from repo {repo_owner}/{repo_name} at {head_sha}")
+        logging.warn(log_prefix + "Failed to extract `.lightning` folder from repo.")
 
     if not config_files:
-        logging.warn(f"No valid configs found in {config_dir}")
+        logging.warn(log_prefix + f"No valid configs found in {config_dir}")
         text_error = f"```console\n{config_error!s}\n```" if config_error else "No specific error details available."
         await post_check(
             data={
@@ -197,15 +198,15 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
                 )
             # skip this config if it is not triggered by the event
             logging.info(
-                f"Skipping config {cfg_file.name} for event {event.event} on branch {branch_ref}"
-                f" because it is not triggered by this event with {config.trigger}."
+                log_prefix + f"Skipping config {cfg_file.name} for event '{event.event}' on branch '{branch_ref}'"
+                f" because it is not triggered by this event with `{config.trigger}`."
             )
             continue
         for config_run in config.generate_runs():
             task_name = (
                 f"{cfg_file.name} / {config_run.name} ({', '.join([p or 'n/a' for p in config_run.params.values()])})"
             )
-            logging.debug(f"=> pull_request: synchronize -> {task_name=}")
+            logging.debug(log_prefix + f"=> pull_request: synchronize -> {task_name=}")
             # Create a check run
             check = await post_check(
                 data={"name": task_name, "head_sha": head_sha, "status": "queued", "details_url": link_lightning_jobs},
@@ -232,10 +233,10 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
             )
 
     # 4) Wait for all tasks to complete
-    logging.info(f"Waiting for {len(tasks)} tasks to complete...")
+    logging.info(log_prefix + f"Waiting for {len(tasks)} tasks to complete...")
     await asyncio.gather(*tasks)
     results = await asyncio.gather(*tasks)
-    logging.info(f"All tasks completed: {results}")
+    logging.info(log_prefix + f"All tasks completed: {results}")
 
 
 async def patch_check_run(token: str, url: str, data: dict, retries: int = 3, backoff: float = 1.0) -> Any:
