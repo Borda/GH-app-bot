@@ -1,10 +1,9 @@
 import glob
 import itertools
 import logging
-from collections.abc import generator
 from copy import deepcopy
 from pathlib import Path
-from typing import Union
+from typing import Union, Generator
 
 import yaml
 
@@ -146,7 +145,7 @@ class ConfigWorkflow:
                 filtered_combinations.append(combo)
         return filtered_combinations
 
-    def generate_runs(self) -> generator["ConfigRun"]:
+    def generate_runs(self) -> Generator["ConfigRun"]:
         """Generate a list of ConfigRun objects from the configuration."""
         for params in self._generate_matrix(self._data):
             yield ConfigRun(config=self, params=params)
