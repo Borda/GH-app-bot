@@ -52,24 +52,24 @@ async def run_sleeping_task(*args: Any, **kwargs: Any):
     return True
 
 
-async def run_repo_job(cfg_file_name: str, config_run: ConfigRun, token: str, job_name: str) -> tuple[Job, str, str]:
+async def run_repo_job(cfg_file_name: str, config: ConfigRun, token: str, job_name: str) -> tuple[Job, str, str]:
     """Download the full repo at `ref` into a tempdir, look for config and execute the job."""
     # mandatory
-    assert config_run.run
+    assert config.run
     # optional
-    docker_run_machine = Machine.from_str(config_run.machine)
+    docker_run_machine = Machine.from_str(config.machine)
 
     # prepare the environment variables to export
-    export_envs = "\n".join([f"export {k}={shlex.quote(str(v))}" for k, v in config_run.env.items()])
+    export_envs = "\n".join([f"export {k}={shlex.quote(str(v))}" for k, v in config.env.items()])
 
     # 1) List the commands you want to run inside the box
-    job_hash = generate_unique_hash(16, params=config_run.params)
+    job_hash = generate_unique_hash(16, params=config.params)
     logs_hash = ("%" * 20) + f"_RUN-LOGS-{generate_unique_hash(32)}_" + ("%" * 20)
     exit_hash = ("%" * 20) + f"_EXIT-CODE-{generate_unique_hash(32)}_" + ("%" * 20)
 
     # 2) generate the script content
     script_file = f"{cfg_file_name.replace('.', '_')}_{job_hash}.sh"
-    script_content = _generate_script_content(export_envs=export_envs, config_run=config_run, separator_str=logs_hash)
+    script_content = _generate_script_content(export_envs=export_envs, config_run=config.run, separator_str=logs_hash)
 
     # 3) Build the full Docker‐run call using a heredoc
     with_gpus = "" if docker_run_machine.is_cpu() else "--gpus=all"
@@ -88,7 +88,7 @@ async def run_repo_job(cfg_file_name: str, config_run: ConfigRun, token: str, jo
         "docker run --rm -i"
         " -v ${PATH_REPO_TEMP}:/workspace"
         " -w /workspace"
-        f" {with_gpus} {config_run.image}"
+        f" {with_gpus} {config.image}"
         f" bash -eo pipefail {script_file} || rc=$? ; "
         f'echo "{exit_hash}\n$rc\n{exit_hash}" ; '
     )
@@ -99,12 +99,12 @@ async def run_repo_job(cfg_file_name: str, config_run: ConfigRun, token: str, jo
         name=job_name,
         command=job_cmd,
         machine=docker_run_machine,
-        interruptible=config_run.interruptible,
+        interruptible=config.interruptible,
         env={
             "LIGHTNING_DEBUG": "1",
-            "GITHUB_REPOSITORY_OWNER": config_run.repository_owner,
-            "GITHUB_REPOSITORY_NAME": config_run.repository_name,
-            "GITHUB_REPOSITORY_REF": config_run.repository_ref,
+            "GITHUB_REPOSITORY_OWNER": config.repository_owner,
+            "GITHUB_REPOSITORY_NAME": config.repository_name,
+            "GITHUB_REPOSITORY_REF": config.repository_ref,
             "GITHUB_TOKEN": token,
             "PATH_REPO_FOLDER": temp_repo_folder,
         },

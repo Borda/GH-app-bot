@@ -277,7 +277,7 @@ async def run_and_complete(
 
     try:
         job, logs_separator, exit_separator = await run_repo_job(
-            cfg_file_name=cfg_file_name, config_run=config_run, token=token, job_name=job_name
+            cfg_file_name=cfg_file_name, config=config_run, token=token, job_name=job_name
         )
     except Exception as ex:
         run_status, run_conclusion = GitHubRunStatus.COMPLETED, GitHubRunConclusion.FAILURE
