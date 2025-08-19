@@ -1,4 +1,3 @@
-import asyncio
 import json
 
 import redis
@@ -14,11 +13,9 @@ redis_client = redis.from_url(REDIS_URL)
 router = routing.Router()
 
 
-# @router.register("push")
 @router.register("pull_request", action="opened")
 @router.register("pull_request", action="synchronize")
 async def handle_pr_event(event, gh, *args, **kwargs):
-    # Enqueue the new event task
     payload = event.data
     task = {
         "type": "new_event",
@@ -49,13 +46,19 @@ async def main(request):
     return web.Response(status=200)
 
 
-async def init_app():
+async def cleanup_handler(app):
+    """Cleanup handler to properly close HTTP session."""
+    await app["http_session"].close()
+
+
+def init_app():
     app = web.Application()
     app.router.add_post("/", main)
     app["http_session"] = ClientSession()
+    app.on_cleanup.append(cleanup_handler)
     return app
 
 
 if __name__ == "__main__":
-    app = asyncio.run(init_app())
-    web.run_app(app, port=8080)  # Or your preferred port
+    app = init_app()
+    web.run_app(app, port=8080)
