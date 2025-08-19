@@ -5,6 +5,7 @@ import redis
 from aiohttp import ClientSession, web
 from gidgethub import routing, sansio
 from gidgethub.aiohttp import GitHubAPI
+from gidgethub.apps import get_installation_access_token
 
 from bot_commons.utils import _load_validate_required_env_vars, create_jwt_token
 from bot_redis_workers import REDIS_URL
@@ -13,7 +14,7 @@ redis_client = redis.from_url(REDIS_URL)
 router = routing.Router()
 
 
-@router.register("push")
+# @router.register("push")
 @router.register("pull_request", action="opened")
 @router.register("pull_request", action="synchronize")
 async def handle_pr_event(event, gh, *args, **kwargs):
@@ -38,11 +39,12 @@ async def main(request):
     installation_id = event.data["installation"]["id"]
     jwt_token = create_jwt_token(github_app_id=github_app_id, app_private_key=private_key)
 
-    async with GitHubAPI(request.app["http_session"], "bot_redis_workers", oauth_token=jwt_token) as gh:
-        access_token = await gh.get_installation_access_token(installation_id)
-        gh.oauth_token = access_token["token"]
-
-        await router.dispatch(event, gh)
+    gh = GitHubAPI(request.app["http_session"], "bot_redis_workers", oauth_token=jwt_token)
+    access_token = await get_installation_access_token(
+        gh, installation_id=installation_id, app_id=str(github_app_id), private_key=private_key
+    )
+    gh.oauth_token = access_token["token"]
+    await router.dispatch(event, gh)
 
     return web.Response(status=200)
 

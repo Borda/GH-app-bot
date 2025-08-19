@@ -1,8 +1,7 @@
 import asyncio
 import logging
 
-import aiohttp
-from aiohttp import web
+from aiohttp import ClientSession, web
 from gidgethub import sansio
 from gidgethub.aiohttp import GitHubAPI
 from gidgethub.apps import get_installation_access_token
@@ -43,16 +42,16 @@ from bot_commons.utils import create_jwt_token
 #         await router.dispatch(event, gh, inst_token)
 
 
-async def process_async_event(event, router, github_app_id: str, app_private_key: str):
+async def process_async_event(event, router, github_app_id: int, app_private_key: str):
     """Authenticate, exchange tokens, and dispatch the event to the router."""
     jwt_token = create_jwt_token(github_app_id=github_app_id, app_private_key=app_private_key)
 
-    async with aiohttp.ClientSession() as session:
+    async with ClientSession() as session:
         # Exchange JWT for installation token
         app_gh = GitHubAPI(session, "bot_async_tasks", oauth_token=jwt_token)
         installation_id = event.data["installation"]["id"]
         token_resp = await get_installation_access_token(
-            app_gh, installation_id=installation_id, app_id=github_app_id, private_key=app_private_key
+            app_gh, installation_id=installation_id, app_id=str(github_app_id), private_key=app_private_key
         )
         inst_token = token_resp["token"]
 
@@ -61,7 +60,7 @@ async def process_async_event(event, router, github_app_id: str, app_private_key
         await router.dispatch(event, gh, inst_token)
 
 
-async def handle_with_offloaded_tasks(request, github_app_id: str, private_key: str, webhooks_secret: str = ""):
+async def handle_with_offloaded_tasks(request, github_app_id: int, app_private_key: str, webhooks_secret: str = ""):
     """Minimal HTTP handler: read the webhook, schedule processing, and ack."""
     # Read the raw body, handling client disconnects
     try:
@@ -81,7 +80,9 @@ async def handle_with_offloaded_tasks(request, github_app_id: str, private_key: 
     router = request.app["router"]
 
     # Offload event processing to a background task
-    asyncio.create_task(process_async_event(event, router, github_app_id=github_app_id, app_private_key=private_key))
+    asyncio.create_task(
+        process_async_event(event, router, github_app_id=github_app_id, app_private_key=app_private_key)
+    )
 
     # Immediately acknowledge receipt
     return web.Response(status=200)

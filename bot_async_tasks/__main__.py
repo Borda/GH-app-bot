@@ -10,7 +10,7 @@ from bot_commons.utils import _load_validate_required_env_vars
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-    github_app_id, private_key, webhook_secret = _load_validate_required_env_vars()
+    github_app_id, app_private_key, webhook_secret = _load_validate_required_env_vars()
     # Create router and register handlers
     router = routing.Router()
     # todo: register also re-run event
@@ -25,7 +25,7 @@ if __name__ == "__main__":
         partial(
             handle_with_offloaded_tasks,
             github_app_id=github_app_id,
-            private_key=private_key,
+            app_private_key=app_private_key,
             webhooks_secret=webhook_secret,
         ),
     )
