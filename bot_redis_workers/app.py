@@ -12,7 +12,7 @@ from bot_redis_workers.tasks import TaskType
 async def handle_pr_event(event, redis_client):
     payload = event.data
     task = {
-        "type": TaskType.NEW_EVENT,
+        "type": TaskType.NEW_EVENT.value,
         "payload": payload,
     }
     # Use the Redis client from app context

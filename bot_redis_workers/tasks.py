@@ -54,20 +54,20 @@ def generate_run_configs(repo_path):
 
 
 def process_task(task: dict, redis_client: redis.Redis):
-    task_type = task["type"]
+    task_type = TaskType(task["type"])
 
     if task_type == TaskType.NEW_EVENT:
         # Pull repo
         # payload = task["payload"]
         # repo_url = payload["repository"]["clone_url"]
-        repo_path = f"/tmp/repo_{task['pr_number']}"  # Temp dir
+        repo_path = f"/tmp/repo_"  # Temp dir
         # git.Repo.clone_from(repo_url, repo_path)  # Or pull if exists
 
         # Generate configs
         configs = generate_run_configs(repo_path)
         for config in configs:
             new_task = {
-                "type": "start_job",
+                "type": TaskType.START_JOB.value,
                 "config": config,  # todo: Placeholder
                 "repo_path": repo_path,
             }
@@ -78,7 +78,7 @@ def process_task(task: dict, redis_client: redis.Redis):
         # Start litJob
         job_id = start_lit_job(task["config"], task["repo_path"])
         new_task = {
-            "type": "wait_job",
+            "type": TaskType.WAIT_JOB.value,
             "job_id": job_id,
             "status": "running",
         }
@@ -94,7 +94,7 @@ def process_task(task: dict, redis_client: redis.Redis):
             print(f"Job {task['job_id']} still running, re-enqueued")
         elif status == "finished":
             new_task = {
-                "type": "process_results",
+                "type": TaskType.RESULTS.value,
                 "job_id": task["job_id"],
             }
             redis_client.rpush("bot_queue", json.dumps(new_task))
