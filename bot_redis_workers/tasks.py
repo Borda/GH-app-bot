@@ -60,7 +60,7 @@ def process_task(task: dict, redis_client: redis.Redis):
         # Pull repo
         # payload = task["payload"]
         # repo_url = payload["repository"]["clone_url"]
-        repo_path = f"/tmp/repo_"  # Temp dir
+        repo_path = "/tmp/repo_"  # Temp dir
         # git.Repo.clone_from(repo_url, repo_path)  # Or pull if exists
 
         # Generate configs
