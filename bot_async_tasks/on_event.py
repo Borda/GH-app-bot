@@ -243,7 +243,7 @@ async def patch_check_run(token: str, url: str, data: dict, retries: int = 3, ba
     """Patch a check run with retries in case of connection issues."""
     timeout = ClientTimeout(total=60)  # allow up to 60 s to connect/send
     async with ClientSession(timeout=timeout) as session:
-        gh_api = GitHubAPI(session, "pr-check-bot", oauth_token=token)
+        gh_api = GitHubAPI(session, "bot_async_tasks", oauth_token=token)
         for it in range(1, retries + 1):  # up to 3 attempts
             try:
                 return await gh_api.patch(url, data=data)
