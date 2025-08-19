@@ -13,9 +13,6 @@ async def handle_pr_event(event, redis_client):
     task = {
         "type": "new_event",
         "payload": payload,
-        "installation_id": payload["installation"]["id"],
-        "repo_full_name": payload["repository"]["full_name"],
-        "pr_number": payload["pull_request"]["number"],
     }
     # Use the Redis client from app context
     redis_client.rpush("bot_queue", json.dumps(task))

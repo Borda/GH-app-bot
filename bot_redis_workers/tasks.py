@@ -2,8 +2,6 @@ import json
 
 import redis
 
-from bot_redis_workers import REDIS_URL
-
 # Import your Lightning modules here, e.g., from lightning import ...
 
 
@@ -40,17 +38,13 @@ async def post_to_github(gh, repo_full_name, pr_number, comment):
     await gh.post(f"/repos/{repo_full_name}/issues/{pr_number}/comments", data={"body": comment})
 
 
-# Connect to Redis (shared across workers)
-redis_client = redis.from_url(REDIS_URL)
-
-
 # Generate run configs - placeholder
 def generate_run_configs(repo_path):
     # e.g., read .litci.yaml from repo_path, generate list of dicts (envs, etc.)
     return [{"env": "python3.8"}, {"env": "python3.10"}]  # Placeholder
 
 
-def process_task(task):
+def process_task(task: dict, redis_client: redis.Redis):
     task_type = task["type"]
 
     if task_type == "new_event":
@@ -65,11 +59,8 @@ def process_task(task):
         for config in configs:
             new_task = {
                 "type": "start_job",
-                "config": config,
-                "repo_path": repo_path,  # Or clean up later
-                "installation_id": task["installation_id"],
-                "repo_full_name": task["repo_full_name"],
-                "pr_number": task["pr_number"],
+                "config": config,  # todo: Placeholder
+                "repo_path": repo_path,
             }
             redis_client.rpush("bot_queue", json.dumps(new_task))
         print(f"Enqueued {len(configs)} start_job tasks")
@@ -81,9 +72,6 @@ def process_task(task):
             "type": "wait_job",
             "job_id": job_id,
             "status": "running",
-            "installation_id": task["installation_id"],
-            "repo_full_name": task["repo_full_name"],
-            "pr_number": task["pr_number"],
         }
         redis_client.rpush("bot_queue", json.dumps(new_task))
         print(f"Started job {job_id}, enqueued wait_job")
@@ -99,9 +87,6 @@ def process_task(task):
             new_task = {
                 "type": "process_results",
                 "job_id": task["job_id"],
-                "installation_id": task["installation_id"],
-                "repo_full_name": task["repo_full_name"],
-                "pr_number": task["pr_number"],
             }
             redis_client.rpush("bot_queue", json.dumps(new_task))
             print(f"Job {task['job_id']} finished, enqueued process_results")
