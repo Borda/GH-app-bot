@@ -93,9 +93,8 @@ This phased approach allows workers to handle tasks concurrently. If a worker re
 
 2. **Start the Webhook Server**:
 
-   - Run `python bot.py`.
-   - The server listens on port 3000 (configurable in code). Use ngrok or a reverse proxy (e.g., Nginx) for public exposure during testing.
-   - Example: `ngrok http 3000` to get a public URL for your GitHub webhook.
+   - Run `python app.py`.
+   - The server listens on port 8080
 
 3. **Start Workers**:
 

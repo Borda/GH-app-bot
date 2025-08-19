@@ -61,4 +61,4 @@ async def init_app():
 
 if __name__ == "__main__":
     app = asyncio.run(init_app())
-    web.run_app(app, port=3000)  # Or your preferred port
+    web.run_app(app, port=8080)  # Or your preferred port
