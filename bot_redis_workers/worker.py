@@ -3,7 +3,7 @@ import logging
 
 import redis
 
-from bot_redis_workers import REDIS_URL, REDIS_QUEUE
+from bot_redis_workers import REDIS_QUEUE, REDIS_URL
 from bot_redis_workers.tasks import process_task
 
 if __name__ == "__main__":
