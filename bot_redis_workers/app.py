@@ -4,6 +4,7 @@ import redis
 from aiohttp import ClientSession, web
 from gidgethub import routing, sansio
 
+from bot_commons.utils import _load_validate_required_env_vars
 from bot_redis_workers import REDIS_URL
 
 
@@ -28,11 +29,13 @@ def make_router():
 
 
 async def main(request):
+    # Load and validate all environment vars exactly once
+    _, _, webhook_secret = _load_validate_required_env_vars()
     body = await request.read()
     app = request.app
 
     # Parse the webhook
-    event = sansio.Event.from_http(request.headers, body, secret=app["webhook_secret"])
+    event = sansio.Event.from_http(request.headers, body, secret=webhook_secret)
 
     # GitHub ping → just ACK
     if event.event == "ping":
