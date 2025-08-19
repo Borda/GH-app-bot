@@ -140,7 +140,7 @@ def sanitize_params_for_env(params: dict) -> dict:
     return sanitized_params
 
 
-def _load_validate_required_env_vars() -> tuple[str, str, str]:
+def _load_validate_required_env_vars() -> tuple[int, str, str]:
     """Ensure required environment variables are set."""
     github_app_id = os.getenv("GITHUB_APP_ID")
     assert github_app_id, "`GITHUB_APP_ID` must be set in environment variables"
@@ -153,10 +153,10 @@ def _load_validate_required_env_vars() -> tuple[str, str, str]:
         assert private_key_path.is_file(), f"Private key file not found at {private_key_path}"
         private_key = private_key_path.read_text()
     webhook_secret = os.getenv("WEBHOOK_SECRET", "")
-    return github_app_id, private_key, webhook_secret
+    return int(github_app_id), private_key, webhook_secret
 
 
-def create_jwt_token(github_app_id: str, app_private_key: str) -> str:
+def create_jwt_token(github_app_id: int, app_private_key: str) -> str:
     """Create a JWT token for authenticating with the GitHub API."""
     return jwt.encode(
         {"iat": int(time.time()) - 60, "exp": int(time.time()) + (10 * 60), "iss": github_app_id},

@@ -50,9 +50,9 @@ async def process_async_event(event, router, github_app_id: str, app_private_key
     async with aiohttp.ClientSession() as session:
         # Exchange JWT for installation token
         app_gh = GitHubAPI(session, "bot_async_tasks", oauth_token=jwt_token)
-        inst_id = event.data["installation"]["id"]
+        installation_id = event.data["installation"]["id"]
         token_resp = await get_installation_access_token(
-            app_gh, installation_id=inst_id, app_id=int(github_app_id), private_key=app_private_key
+            app_gh, installation_id=installation_id, app_id=github_app_id, private_key=app_private_key
         )
         inst_token = token_resp["token"]
 

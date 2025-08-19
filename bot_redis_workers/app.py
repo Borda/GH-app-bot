@@ -35,17 +35,12 @@ async def main(request):
     github_app_id, private_key, webhook_secret = _load_validate_required_env_vars()
     body = await request.read()
     event = sansio.Event.from_http(request.headers, body, secret=webhook_secret)
-    installation_id = event.data.get("installation", {}).get("id")
+    installation_id = event.data["installation"]["id"]
+    jwt_token = create_jwt_token(github_app_id=github_app_id, app_private_key=private_key)
 
-    async with GitHubAPI(
-        request.app["http_session"],
-        "bot_redis_workers",
-        oauth_token=None,  # For apps, use JWT
-        jwt=create_jwt_token(github_app_id=github_app_id, app_private_key=private_key),
-    ) as gh:
-        if installation_id:
-            access_token = await gh.get_installation_access_token(installation_id)
-            gh.oauth_token = access_token["token"]
+    async with GitHubAPI(request.app["http_session"], "bot_redis_workers", oauth_token=jwt_token) as gh:
+        access_token = await gh.get_installation_access_token(installation_id)
+        gh.oauth_token = access_token["token"]
 
         await router.dispatch(event, gh)
 
