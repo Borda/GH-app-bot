@@ -1,4 +1,5 @@
 import json
+import logging
 
 import redis
 from aiohttp import ClientSession, web
