@@ -77,7 +77,7 @@ ______________________________________________________________________
 Start your bot in Studio:
 
 ```bash
-python greeter-bot.py
+python greeter-app.py
 ```
 
 Once live, test by:

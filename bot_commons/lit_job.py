@@ -46,13 +46,13 @@ def strip_ansi(text: str) -> str:
     return ANSI_ESCAPE.sub("", text)
 
 
-async def run_sleeping_task(*args: Any, **kwargs: Any):
+async def demo_sleeping_task(*args: Any, **kwargs: Any):
     # Replace it with real logic; here we just succeed
     await asyncio.sleep(60)
     return True
 
 
-async def run_repo_job(cfg_file_name: str, config: ConfigRun, token: str, job_name: str) -> tuple[Job, str, str]:
+async def job_run(cfg_file_name: str, config: ConfigRun, token: str, job_name: str) -> tuple[Job, str, str]:
     """Download the full repo at `ref` into a tempdir, look for config and execute the job."""
     # mandatory
     assert config.run
