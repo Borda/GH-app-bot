@@ -1,9 +1,17 @@
 import json
 import logging
+from enum import Enum
 
 import redis
 
-from bot_redis_workers.types import TaskType
+
+class TaskType(Enum):
+    """Task types"""
+
+    NEW_EVENT = "new_event"
+    START_JOB = "start_job"
+    WAIT_JOB = "wait_job"
+    RESULTS = "results"
 
 
 # Placeholder functions - replace with your actual litJob (Lightning Job) logic

@@ -6,7 +6,7 @@ from gidgethub import routing, sansio
 
 from bot_commons.utils import _load_validate_required_env_vars
 from bot_redis_workers import REDIS_URL
-from bot_redis_workers.types import TaskType
+from bot_redis_workers.tasks import TaskType
 
 
 async def handle_pr_event(event, redis_client):
