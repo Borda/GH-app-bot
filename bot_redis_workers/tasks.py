@@ -4,9 +4,11 @@ from enum import Enum
 
 import redis
 
+from bot_redis_workers import REDIS_QUEUE
 
-class TaskType(Enum):
-    """Task types"""
+
+class TaskPhase(Enum):
+    """Life-cycle phases for tasks."""
 
     NEW_EVENT = "new_event"
     START_JOB = "start_job"
@@ -53,55 +55,65 @@ def generate_run_configs(repo_path):
     return [{"env": "python3.8"}, {"env": "python3.10"}]  # Placeholder
 
 
-def process_task(task: dict, redis_client: redis.Redis):
-    task_type = TaskType(task["type"])
+def push_to_redis(redis_client: redis.Redis, task: dict):
+    redis_client.rpush(REDIS_QUEUE, json.dumps(task))
 
-    if task_type == TaskType.NEW_EVENT:
+
+def process_task(task: dict, redis_client: redis.Redis):
+    task_phase = TaskPhase(task["phase"])
+
+    if task_phase == TaskPhase.NEW_EVENT:
         # Pull repo
         # payload = task["payload"]
         # repo_url = payload["repository"]["clone_url"]
-        repo_path = f"/tmp/repo_"  # Temp dir
+        repo_path = "/tmp/repo_"  # Temp dir
         # git.Repo.clone_from(repo_url, repo_path)  # Or pull if exists
 
         # Generate configs
         configs = generate_run_configs(repo_path)
         for config in configs:
-            new_task = {
-                "type": TaskType.START_JOB.value,
-                "config": config,  # todo: Placeholder
-                "repo_path": repo_path,
-            }
-            redis_client.rpush("bot_queue", json.dumps(new_task))
+            push_to_redis(
+                redis_client,
+                {
+                    "phase": TaskPhase.START_JOB.value,
+                    "config": config,
+                    "repo_path": repo_path,
+                },
+            )
         print(f"Enqueued {len(configs)} start_job tasks")
 
-    elif task_type == TaskType.START_JOB:
+    elif task_phase == TaskPhase.START_JOB:
         # Start litJob
         job_id = start_lit_job(task["config"], task["repo_path"])
-        new_task = {
-            "type": TaskType.WAIT_JOB.value,
-            "job_id": job_id,
-            "status": "running",
-        }
-        redis_client.rpush("bot_queue", json.dumps(new_task))
+        push_to_redis(
+            redis_client,
+            {
+                "phase": TaskPhase.WAIT_JOB.value,
+                "job_id": job_id,
+                "status": "running",
+            },
+        )
         print(f"Started job {job_id}, enqueued wait_job")
 
-    elif task_type == TaskType.WAIT_JOB:
+    elif task_phase == TaskPhase.WAIT_JOB:
         # Check status
         status = check_lit_job_status(task["job_id"])
         if status == "running":
             # Put back to queue
-            redis_client.rpush("bot_queue", json.dumps(task))
+            push_to_redis(redis_client, task)
             print(f"Job {task['job_id']} still running, re-enqueued")
         elif status == "finished":
-            new_task = {
-                "type": TaskType.RESULTS.value,
-                "job_id": task["job_id"],
-            }
-            redis_client.rpush("bot_queue", json.dumps(new_task))
+            push_to_redis(
+                redis_client,
+                {
+                    "phase": TaskPhase.RESULTS.value,
+                    "job_id": task["job_id"],
+                },
+            )
             print(f"Job {task['job_id']} finished, enqueued process_results")
-        # Handle failed, etc.
+        # todo: Handle failed, etc.
 
-    elif task_type == TaskType.RESULTS:
+    elif task_phase == TaskPhase.RESULTS:
         # Process logs
         logs = get_lit_job_logs(task["job_id"])
         summary = summarize_logs(logs)
@@ -111,10 +123,11 @@ def process_task(task: dict, redis_client: redis.Redis):
         # Placeholder: print summary
         print(f"PR: {summary}")
 
+        # todo
         # Actual: Use gidgethub sync or wrap
         # from gidgethub import GitHubAPI as SyncGH
         # gh = SyncGH(...)  # Get token similarly
         # gh.post(...)
 
     else:
-        logging.warn(f"Unknown task type: {task_type}")
+        logging.warn(f"Unknown task type: {task_phase}")

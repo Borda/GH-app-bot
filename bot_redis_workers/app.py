@@ -5,19 +5,20 @@ from aiohttp import ClientSession, web
 from gidgethub import routing, sansio
 
 from bot_commons.utils import _load_validate_required_env_vars
-from bot_redis_workers import REDIS_URL
-from bot_redis_workers.tasks import TaskType
+from bot_redis_workers import REDIS_QUEUE, REDIS_URL
+from bot_redis_workers.tasks import TaskPhase
 
 
 async def handle_pr_event(event, redis_client):
     payload = event.data
     task = {
-        "type": TaskType.NEW_EVENT.value,
+        "type": event.event,
+        "phase": TaskPhase.NEW_EVENT.value,
         "payload": payload,
     }
     # Use the Redis client from app context
-    redis_client.rpush("bot_queue", json.dumps(task))
-    print(f"Enqueued new_event for PR #{task['pr_number']}")
+    redis_client.rpush(REDIS_QUEUE, json.dumps(task))
+    print(f"Enqueued new_event for PR #{payload['pull_request']['number']}")
 
 
 async def main(request):
