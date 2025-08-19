@@ -13,7 +13,8 @@ from bot_redis_workers.tasks import TaskPhase
 async def handle_pr_event(event, redis_client):
     payload = event.data
     task = {
-        "type": event.event,
+        "delivery_id": event.delivery_id,
+        "event_type": event.event,
         "phase": TaskPhase.NEW_EVENT.value,
         "payload": payload,
     }

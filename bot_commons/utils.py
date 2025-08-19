@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import os
 import re
@@ -5,8 +6,10 @@ import time
 import zipfile
 from pathlib import Path
 from textwrap import TextWrapper
+from typing import Any
 
 import jwt
+from aiohttp import client_exceptions
 
 
 def generate_unique_hash(length=16, params: dict | None = None) -> str:
@@ -163,3 +166,30 @@ def create_jwt_token(github_app_id: int, app_private_key: str) -> str:
         app_private_key,
         algorithm="RS256",
     )
+
+
+def extract_repo_details(event_type: str, payload: dict) -> tuple[str, str, str, str]:
+    """Extract the repository owner, name, head SHA, and branch ref from the event payload."""
+    if event_type == "push":
+        head_sha = payload["after"]
+        branch_ref = payload["ref"][len("refs/heads/") :]
+    elif event_type == "pull_request":
+        head_sha = payload["pull_request"]["head"]["sha"]
+        branch_ref = payload["pull_request"]["base"]["ref"]
+    else:
+        raise ValueError(f"Unsupported event type: {event_type}")
+    repo_owner = payload["repository"]["owner"]["login"]
+    repo_name = payload["repository"]["name"]
+    return repo_owner, repo_name, head_sha, branch_ref
+
+
+async def post_with_retry(gh, url: str, data: dict, retries: int = 3, backoff: float = 1.0) -> Any:
+    """Post data to GitHub API with retries in case of connection issues."""
+    for it in range(1, retries + 1):
+        try:
+            return await gh.post(url, data=data)
+        except client_exceptions.ServerDisconnectedError:
+            if it == retries:
+                raise
+            await asyncio.sleep(backoff * it)
+    return None

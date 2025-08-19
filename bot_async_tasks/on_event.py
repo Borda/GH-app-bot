@@ -17,6 +17,8 @@ from bot_async_tasks.downloads import download_repo_and_extract
 from bot_commons.configs import ConfigFile, ConfigRun, ConfigWorkflow
 from bot_commons.lit_job import finalize_job, job_run
 from bot_commons.utils import (
+    extract_repo_details,
+    post_with_retry,
     wrap_long_text,
 )
 
@@ -91,29 +93,10 @@ class GitHubRunConclusion(Enum):
 #     )
 
 
-async def post_with_retry(gh, url: str, data: dict, retries: int = 3, backoff: float = 1.0) -> Any:
-    """Post data to GitHub API with retries in case of connection issues."""
-    for it in range(1, retries + 1):
-        try:
-            return await gh.post(url, data=data)
-        except client_exceptions.ServerDisconnectedError:
-            if it == retries:
-                raise
-            await asyncio.sleep(backoff * it)
-    return None
-
-
 async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> None:
     """Handle GitHub webhook events for code changes (push or pull_request)."""
     # figure out the commit SHA and branch ref
-    if event.event == "push":
-        head_sha = event.data["after"]
-        branch_ref = event.data["ref"][len("refs/heads/") :]
-    else:  # pull_request
-        head_sha = event.data["pull_request"]["head"]["sha"]
-        branch_ref = event.data["pull_request"]["base"]["ref"]
-    repo_owner = event.data["repository"]["owner"]["login"]
-    repo_name = event.data["repository"]["name"]
+    repo_owner, repo_name, head_sha, branch_ref = extract_repo_details(event.event, event.data)
     link_lightning_jobs = f"{LIGHTNING_CLOUD_URL}/{this_teamspace().owner.name}/{this_teamspace().name}/jobs/"
     # Create a partial function for posting check runs
     post_check = partial(post_with_retry, gh=gh, url=f"/repos/{repo_owner}/{repo_name}/check-runs")
@@ -125,7 +108,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
         repo_owner=repo_owner,
         repo_name=repo_name,
         git_ref=head_sha,
-        token=token,
+        auth_token=token,
         folder_path=LOCAL_TEMP_DIR,
         # extract only the `.lightning` subfolder
         subfolder=".lightning",  # extract only `.lightning` subfolder
