@@ -71,12 +71,12 @@ The bot processes GitHub events through a queued, phased lifecycle to ensure rel
    - Worker pops `'wait_job'`.
    - Checks the job status (placeholder: via Lightning SDK).
    - If still running: Re-enqueues the same `'wait_job'` task.
-   - If finished: Enqueues a `'process_results'` task.
+   - If finished: Enqueues a `'results'` task.
    - (Handle failures by adding error status or notifications.)
 
 5. **Process Results**:
 
-   - Worker pops `'process_results'`.
+   - Worker pops `'results'`.
    - Fetches job logs (placeholder).
    - Summarizes results.
    - Posts the summary as a comment on the GitHub PR.
