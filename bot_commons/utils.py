@@ -6,6 +6,8 @@ import zipfile
 from pathlib import Path
 from textwrap import TextWrapper
 
+import jwt
+
 
 def generate_unique_hash(length=16, params: dict | None = None) -> str:
     """Generate a unique hash string of a specified length.
@@ -152,3 +154,12 @@ def _load_validate_required_env_vars() -> tuple[str, str, str]:
         private_key = private_key_path.read_text()
     webhook_secret = os.getenv("WEBHOOK_SECRET", "")
     return github_app_id, private_key, webhook_secret
+
+
+def create_jwt_token(github_app_id: str, app_private_key: str) -> str:
+    """Create a JWT token for authenticating with the GitHub API."""
+    return jwt.encode(
+        {"iat": int(time.time()) - 60, "exp": int(time.time()) + (10 * 60), "iss": github_app_id},
+        app_private_key,
+        algorithm="RS256",
+    )

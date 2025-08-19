@@ -50,7 +50,7 @@ The bot processes GitHub events through a queued, phased lifecycle to ensure rel
 
 1. **Webhook Reception (New Event)**:
 
-   - GitHub sends a webhook event (e.g., pull_request opened or synchronized) to the server (`bot.py`).
+   - GitHub sends a webhook event (e.g., pull_request opened or synchronized) to the server (`app.py`).
    - The event is validated and enqueued as a task of type `'new_event'` with the payload (repo details, PR number, etc.) into the Redis queue (`bot_queue`).
 
 2. **New Event Processing**:
@@ -106,13 +106,13 @@ This phased approach allows workers to handle tasks concurrently. If a worker re
 4. **Testing**:
 
    - Create or update a PR in a repo where the GitHub App is installed.
-   - Monitor console logs in `bot.py` and `worker.py` for enqueue/dequeue actions.
+   - Monitor console logs in `app.py` and `worker.py` for enqueue/dequeue actions.
    - Use `redis-cli` to inspect the queue: `llen bot_queue` (length) or `lrange bot_queue 0 -1` (view tasks).
    - Simulate restarts: Kill a worker; tasks should be picked up by others.
 
 ## Code Structure
 
-- `bot.py`: Webhook server using `gidgethub[aiohttp]`.
+- `app.py`: Webhook server using `gidgethub[aiohttp]`.
 - `worker.py`: Worker loop to process queued tasks.
 - `tasks.py`: Logic for each task type (e.g., start_lit_job placeholders).
 

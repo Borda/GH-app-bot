@@ -6,7 +6,7 @@ from aiohttp import ClientSession, web
 from gidgethub import routing, sansio
 from gidgethub.aiohttp import GitHubAPI
 
-from bot_commons.utils import _load_validate_required_env_vars
+from bot_commons.utils import _load_validate_required_env_vars, create_jwt_token
 from bot_redis_workers import REDIS_URL
 
 redis_client = redis.from_url(REDIS_URL)
@@ -39,9 +39,9 @@ async def main(request):
 
     async with GitHubAPI(
         request.app["http_session"],
-        "bot",
+        "bot_redis_workers",
         oauth_token=None,  # For apps, use JWT
-        jwt=sansio.create_app_jwt(github_app_id, private_key),
+        jwt=create_jwt_token(github_app_id=github_app_id, app_private_key=private_key),
     ) as gh:
         if installation_id:
             access_token = await gh.get_installation_access_token(installation_id)
