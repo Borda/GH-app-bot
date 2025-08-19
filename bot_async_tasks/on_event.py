@@ -15,7 +15,7 @@ from lightning_sdk.lightning_cloud.env import LIGHTNING_CLOUD_URL
 
 from bot_async_tasks.downloads import download_repo_and_extract
 from bot_commons.configs import ConfigFile, ConfigRun, ConfigWorkflow
-from bot_commons.lit_job import finalize_job, run_repo_job
+from bot_commons.lit_job import finalize_job, job_run
 from bot_commons.utils import (
     wrap_long_text,
 )
@@ -222,7 +222,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
             # detach with only the token, owner, repo, etc.
             tasks.append(
                 asyncio.create_task(
-                    run_and_complete(
+                    complete_run(
                         fn_patch_check_run=patch_this_check_run,
                         job_name=job_name,
                         cfg_file_name=cfg_file.name,
@@ -254,7 +254,7 @@ async def patch_check_run(token: str, url: str, data: dict, retries: int = 3, ba
     return None
 
 
-async def run_and_complete(
+async def complete_run(
     fn_patch_check_run: Callable,
     job_name: str,
     cfg_file_name: str,
@@ -276,7 +276,7 @@ async def run_and_complete(
     logs_separator, exit_separator = "", ""  # String used for cutoff processing
 
     try:
-        job, logs_separator, exit_separator = await run_repo_job(
+        job, logs_separator, exit_separator = await job_run(
             cfg_file_name=cfg_file_name, config=config_run, token=token, job_name=job_name
         )
     except Exception as ex:
