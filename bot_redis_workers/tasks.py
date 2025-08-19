@@ -130,4 +130,4 @@ def process_task(task: dict, redis_client: redis.Redis):
         # gh.post(...)
 
     else:
-        logging.warn(f"Unknown task type: {task_phase}")
+        logging.warning(f"Unknown task type: {task_phase}")

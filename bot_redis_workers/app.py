@@ -41,7 +41,11 @@ async def main(request):
 
 async def init_app():
     # Localize Redis client creation here
-    redis_client = redis.from_url(REDIS_URL)
+    try:
+        redis_client = redis.from_url(REDIS_URL)
+    except Exception as ex:
+        logging.error(f"Failed to connect to Redis at {REDIS_URL}: {ex}")
+        raise
 
     # Create a GitHub routing router
     router = routing.Router()
