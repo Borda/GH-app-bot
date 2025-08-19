@@ -6,7 +6,7 @@ from gidgethub import sansio
 from gidgethub.aiohttp import GitHubAPI
 from gidgethub.apps import get_installation_access_token
 
-from bot_commons.utils import create_jwt_token
+from bot_commons.utils import _load_validate_required_env_vars, create_jwt_token
 
 # async def handle_webhook(request):
 #     print("=== webhook hit ===")
@@ -60,18 +60,20 @@ async def process_async_event(event, router, github_app_id: int, app_private_key
         await router.dispatch(event, gh, inst_token)
 
 
-async def handle_with_offloaded_tasks(request, github_app_id: int, app_private_key: str, webhooks_secret: str = ""):
+async def handle_request(request):
     """Minimal HTTP handler: read the webhook, schedule processing, and ack."""
-    # Read the raw body, handling client disconnects
+    github_app_id, app_private_key, webhook_secret = _load_validate_required_env_vars()
+
     try:
+        # Read the raw body, handling client disconnects
         body = await request.read()
     except ConnectionResetError:
         logging.warning("Client disconnected before request body was fully read")
         return web.Response(status=400)
 
-    # Parse the GitHub webhook event, validating signature
     try:
-        event = sansio.Event.from_http(request.headers, body, secret=webhooks_secret)
+        # Parse the GitHub webhook event, validating signature
+        event = sansio.Event.from_http(request.headers, body, secret=webhook_secret)
     except Exception as exc:
         logging.error("Failed to parse webhook event", exc_info=exc)
         return web.Response(status=400)
