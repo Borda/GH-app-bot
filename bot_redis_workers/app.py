@@ -6,12 +6,13 @@ from gidgethub import routing, sansio
 
 from bot_commons.utils import _load_validate_required_env_vars
 from bot_redis_workers import REDIS_URL
+from bot_redis_workers.types import TaskType
 
 
 async def handle_pr_event(event, redis_client):
     payload = event.data
     task = {
-        "type": "new_event",
+        "type": TaskType.NEW_EVENT,
         "payload": payload,
     }
     # Use the Redis client from app context

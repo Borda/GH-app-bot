@@ -1,8 +1,9 @@
 import json
+import logging
 
 import redis
 
-# Import your Lightning modules here, e.g., from lightning import ...
+from bot_redis_workers.types import TaskType
 
 
 # Placeholder functions - replace with your actual litJob (Lightning Job) logic
@@ -47,7 +48,7 @@ def generate_run_configs(repo_path):
 def process_task(task: dict, redis_client: redis.Redis):
     task_type = task["type"]
 
-    if task_type == "new_event":
+    if task_type == TaskType.NEW_EVENT:
         # Pull repo
         # payload = task["payload"]
         # repo_url = payload["repository"]["clone_url"]
@@ -65,7 +66,7 @@ def process_task(task: dict, redis_client: redis.Redis):
             redis_client.rpush("bot_queue", json.dumps(new_task))
         print(f"Enqueued {len(configs)} start_job tasks")
 
-    elif task_type == "start_job":
+    elif task_type == TaskType.START_JOB:
         # Start litJob
         job_id = start_lit_job(task["config"], task["repo_path"])
         new_task = {
@@ -76,7 +77,7 @@ def process_task(task: dict, redis_client: redis.Redis):
         redis_client.rpush("bot_queue", json.dumps(new_task))
         print(f"Started job {job_id}, enqueued wait_job")
 
-    elif task_type == "wait_job":
+    elif task_type == TaskType.WAIT_JOB:
         # Check status
         status = check_lit_job_status(task["job_id"])
         if status == "running":
@@ -92,7 +93,7 @@ def process_task(task: dict, redis_client: redis.Redis):
             print(f"Job {task['job_id']} finished, enqueued process_results")
         # Handle failed, etc.
 
-    elif task_type == "process_results":
+    elif task_type == TaskType.RESULTS:
         # Process logs
         logs = get_lit_job_logs(task["job_id"])
         summary = summarize_logs(logs)
@@ -100,7 +101,7 @@ def process_task(task: dict, redis_client: redis.Redis):
         # Report to GH (use sync wrapper for async if needed, but here assume sync)
         # For real, you might need to create a sync GitHubAPI
         # Placeholder: print summary
-        print(f"PR #{task['pr_number']}: {summary}")
+        print(f"PR: {summary}")
 
         # Actual: Use gidgethub sync or wrap
         # from gidgethub import GitHubAPI as SyncGH
@@ -108,4 +109,4 @@ def process_task(task: dict, redis_client: redis.Redis):
         # gh.post(...)
 
     else:
-        print(f"Unknown task type: {task_type}")
+        logging.warn(f"Unknown task type: {task_type}")
