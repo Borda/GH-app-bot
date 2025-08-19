@@ -3,6 +3,7 @@ import itertools
 import logging
 from collections.abc import Generator
 from copy import deepcopy
+from enum import Enum
 from pathlib import Path
 
 import yaml
@@ -10,14 +11,36 @@ import yaml
 from bot_commons.utils import sanitize_params_for_env, to_bool
 
 
+class GitHubRunStatus(Enum):
+    """Enum for GitHub check run statuses."""
+
+    QUEUED = "queued"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+
+
+class GitHubRunConclusion(Enum):
+    """Enum for GitHub check run conclusions."""
+
+    SUCCESS = "success"
+    FAILURE = "failure"
+    SKIPPED = "skipped"
+    NEUTRAL = "neutral"
+    CANCELLED = "cancelled"
+    TIMED_OUT = "timed_out"
+    ACTION_REQUIRED = "action_required"
+
+
 class ConfigWorkflow:
     """Configuration for a run, including matrix generation."""
 
     _RESTRICTED_PARAMETERS = ("env", "run")
     _data: dict
+    file_name: str
 
-    def __init__(self, config: dict):
+    def __init__(self, config: dict, file_name: str = ""):
         self._data = config
+        self.file_name = file_name
 
     @property
     def name(self) -> str:
@@ -165,10 +188,12 @@ class ConfigRun:
 
     _data: dict
     params: dict
+    file_name: str
 
     def __init__(self, config: ConfigWorkflow, params: dict):
         self._data = deepcopy(config._data)
         self.params = {k: v for k, v in params.items() if k not in ConfigWorkflow._RESTRICTED_PARAMETERS}
+        self.file_name = config.file_name
 
     @property
     def name(self) -> str:

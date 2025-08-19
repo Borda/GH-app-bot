@@ -193,3 +193,15 @@ async def post_with_retry(gh, url: str, data: dict, retries: int = 3, backoff: f
                 raise
             await asyncio.sleep(backoff * it)
     return None
+
+
+async def patch_with_retry(gh, url: str, data: dict, retries: int = 3, backoff: float = 1.0) -> Any:
+    """Post data to GitHub API with retries in case of connection issues."""
+    for it in range(1, retries + 1):
+        try:
+            return await gh.patch(url, data=data)
+        except client_exceptions.ServerDisconnectedError:
+            if it == retries:
+                raise
+            await asyncio.sleep(backoff * it)
+    return None

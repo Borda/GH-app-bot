@@ -52,7 +52,7 @@ async def demo_sleeping_task(*args: Any, **kwargs: Any):
     return True
 
 
-async def job_run(cfg_file_name: str, config: ConfigRun, token: str, job_name: str) -> tuple[Job, str, str]:
+async def job_run(cfg_file_name: str, config: ConfigRun, gh_token: str, job_name: str) -> tuple[Job, str, str]:
     """Download the full repo at `ref` into a tempdir, look for config and execute the job."""
     # mandatory
     assert config.run
@@ -105,7 +105,7 @@ async def job_run(cfg_file_name: str, config: ConfigRun, token: str, job_name: s
             "GITHUB_REPOSITORY_OWNER": config.repository_owner,
             "GITHUB_REPOSITORY_NAME": config.repository_name,
             "GITHUB_REPOSITORY_REF": config.repository_ref,
-            "GITHUB_TOKEN": token,
+            "GITHUB_TOKEN": gh_token,
             "PATH_REPO_FOLDER": temp_repo_folder,
         },
     )

@@ -3,21 +3,21 @@ import datetime
 import logging
 import shutil
 from collections.abc import Callable
-from enum import Enum
 from functools import lru_cache, partial
 from pathlib import Path
 from typing import Any
 
-from aiohttp import ClientSession, ClientTimeout, client_exceptions
+from aiohttp import ClientSession, ClientTimeout
 from gidgethub.aiohttp import GitHubAPI
 from lightning_sdk import Status, Teamspace
 from lightning_sdk.lightning_cloud.env import LIGHTNING_CLOUD_URL
 
 from bot_async_tasks.downloads import download_repo_and_extract
-from bot_commons.configs import ConfigFile, ConfigRun, ConfigWorkflow
+from bot_commons.configs import ConfigFile, ConfigRun, ConfigWorkflow, GitHubRunConclusion, GitHubRunStatus
 from bot_commons.lit_job import finalize_job, job_run
 from bot_commons.utils import (
     extract_repo_details,
+    patch_with_retry,
     post_with_retry,
     wrap_long_text,
 )
@@ -34,26 +34,6 @@ LOCAL_TEMP_DIR = LOCAL_ROOT_DIR / ".temp"
 def this_teamspace() -> Teamspace:
     """Get the current Teamspace instance."""
     return Teamspace()
-
-
-class GitHubRunStatus(Enum):
-    """Enum for GitHub check run statuses."""
-
-    QUEUED = "queued"
-    IN_PROGRESS = "in_progress"
-    COMPLETED = "completed"
-
-
-class GitHubRunConclusion(Enum):
-    """Enum for GitHub check run conclusions."""
-
-    SUCCESS = "success"
-    FAILURE = "failure"
-    SKIPPED = "skipped"
-    NEUTRAL = "neutral"
-    CANCELLED = "cancelled"
-    TIMED_OUT = "timed_out"
-    ACTION_REQUIRED = "action_required"
 
 
 # async def on_pr_sync_simple(event, gh, *args: Any, **kwargs: Any) -> None:
@@ -153,7 +133,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
     # 3) Launch check runs for each job
     tasks = []
     for cfg_file in config_files:
-        config = ConfigWorkflow(cfg_file.body)
+        config = ConfigWorkflow(cfg_file.body, file_name=cfg_file.name)
         config.append_repo_details(
             repo_owner=repo_owner,
             repo_name=repo_name,
@@ -186,9 +166,8 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
             )
             continue
         for config_run in config.generate_runs():
-            task_name = (
-                f"{cfg_file.name} / {config_run.name} ({', '.join([p or 'n/a' for p in config_run.params.values()])})"
-            )
+            run_params = [p or "n/a" for p in config_run.params.values()]
+            task_name = f"{config_run.file_name} / {config_run.name} ({', '.join(run_params)})"
             logging.debug(log_prefix + f"=> pull_request: synchronize -> {task_name=}")
             # Create a check run
             check = await post_check(
@@ -208,7 +187,6 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
                     complete_run(
                         fn_patch_check_run=patch_this_check_run,
                         job_name=job_name,
-                        cfg_file_name=cfg_file.name,
                         config_run=config_run,
                         token=token,
                     )
@@ -224,23 +202,15 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
 
 async def patch_check_run(token: str, url: str, data: dict, retries: int = 3, backoff: float = 1.0) -> Any:
     """Patch a check run with retries in case of connection issues."""
-    timeout = ClientTimeout(total=60)  # allow up to 60 s to connect/send
+    timeout = ClientTimeout(total=retries)
     async with ClientSession(timeout=timeout) as session:
         gh_api = GitHubAPI(session, "bot_async_tasks", oauth_token=token)
-        for it in range(1, retries + 1):  # up to 3 attempts
-            try:
-                return await gh_api.patch(url, data=data)
-            except (asyncio.TimeoutError, client_exceptions.ClientConnectorError):
-                if it == retries:
-                    raise
-                await asyncio.sleep(it * backoff)
-    return None
+        return patch_with_retry(gh_api, url, data, retries=retries, backoff=backoff)
 
 
 async def complete_run(
     fn_patch_check_run: Callable,
     job_name: str,
-    cfg_file_name: str,
     config_run: ConfigRun,
     token: str,
 ) -> GitHubRunConclusion:
@@ -260,7 +230,7 @@ async def complete_run(
 
     try:
         job, logs_separator, exit_separator = await job_run(
-            cfg_file_name=cfg_file_name, config=config_run, token=token, job_name=job_name
+            cfg_file_name=config_run.file_name, config=config_run, gh_token=token, job_name=job_name
         )
     except Exception as ex:
         run_status, run_conclusion = GitHubRunStatus.COMPLETED, GitHubRunConclusion.FAILURE
