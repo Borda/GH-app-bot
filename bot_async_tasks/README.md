@@ -16,7 +16,7 @@ It validates code quality, runs tests across different environments, enforces pr
 ## Configuration
 
 The bot reads YAML workflow configuration files from the `.lightning/workflows/` directory in your repository.
-See the [sample configuration file](../examples/sample-workflow.yml) for an example.
+See the [sample configuration file](../examples/simple-workflow.yml) for an example.
 
 ## Multiple Configurations
 

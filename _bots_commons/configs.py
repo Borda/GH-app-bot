@@ -53,10 +53,11 @@ class ConfigWorkflow(ConfigBase):
     >>> dir_examples = Path(__file__).resolve().parent.parent / "examples"
     >>> dir_examples.exists()
     True
-    >>> cfg_files = ConfigFile.load_from_folder(dir_examples)
-    >>> cfg = ConfigWorkflow(cfg_files[0].body)
-    >>> len(list(cfg.generate_runs()))
-    5
+    >>> for cfg_file in ConfigFile.load_from_folder(dir_examples):
+    ...     cfg = ConfigWorkflow(cfg_file.body, file_name=cfg_file.name)
+    ...     print(cfg.file_name, len(list(cfg.generate_runs())))
+    multi-workflow.yml 5
+    simple-workflow.yml 1
     """
 
     _RESTRICTED_PARAMETERS = ("env", "run")
@@ -148,8 +149,12 @@ class ConfigWorkflow(ConfigBase):
 
         >>> empty_config = {}
         >>> ConfigWorkflow._generate_matrix(empty_config)
-        []
+        [{}]
         """
+        if not parametrize:
+            # edge case: if the config is empty, return a list with an empty configuration
+            # this makes it run just once with no parameters
+            return [{}]
         matrix = parametrize.get("matrix", {})
         include = parametrize.get("include", [])
         exclude = parametrize.get("exclude", [])
@@ -328,9 +333,9 @@ class ConfigFile(ConfigBase):
         True
         >>> configs = ConfigFile.load_from_folder(dir_examples)
         >>> len(configs)
-        1
-        >>> configs[0].name
-        'sample-workflow.yml'
+        2
+        >>> [c.name for c in configs]
+        ['multi-workflow.yml', 'simple-workflow.yml']
         """
         path_dir = Path(path_dir).resolve()
         if not path_dir.is_dir():
