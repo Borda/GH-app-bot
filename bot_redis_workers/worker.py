@@ -6,7 +6,7 @@ import traceback
 import redis
 
 from bot_redis_workers import REDIS_QUEUE, REDIS_URL
-from bot_redis_workers.tasks import process_task
+from bot_redis_workers.tasks import process_task_with_session
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -19,7 +19,7 @@ if __name__ == "__main__":
         _, task_json = redis_client.blpop(REDIS_QUEUE)
         task = json.loads(task_json)
         try:
-            asyncio.run(process_task(task, redis_client))
+            asyncio.run(process_task_with_session(task, redis_client))
         except KeyboardInterrupt:
             redis_client.rpush(REDIS_QUEUE, json.dumps(task))
             break

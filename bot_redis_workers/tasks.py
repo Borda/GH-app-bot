@@ -173,7 +173,13 @@ async def _post_gh_run_status_update_check(
     )
 
 
-async def process_task(task: dict, redis_client: redis.Redis) -> None:
+async def process_task_with_session(task: dict, redis_client: redis.Redis) -> None:
+    """Wrapper that manages the aiohttp session for the entire task processing."""
+    async with ClientSession() as session:
+        await _process_task_inner(task, redis_client, session)
+
+
+async def _process_task_inner(task: dict, redis_client: redis.Redis, session) -> None:
     task_phase = TaskPhase(task["phase"])
     event_type = task["event_type"]
     payload = task["payload"]
@@ -183,13 +189,12 @@ async def process_task(task: dict, redis_client: redis.Redis) -> None:
 
     github_app_id, app_private_key, webhook_secret = _load_validate_required_env_vars()
     jwt_token = create_jwt_token(github_app_id=github_app_id, app_private_key=app_private_key)
-    async with ClientSession() as session:
-        # Exchange JWT for installation token
-        app_gh = GitHubAPI(session, "bot_redis_workers", oauth_token=jwt_token)
-        installation_id = payload["installation"]["id"]
-        token_resp = await get_installation_access_token(
-            app_gh, installation_id=installation_id, app_id=str(github_app_id), private_key=app_private_key
-        )
+    # Exchange JWT for installation token
+    app_gh = GitHubAPI(session, "bot_redis_workers", oauth_token=jwt_token)
+    installation_id = payload["installation"]["id"]
+    token_resp = await get_installation_access_token(
+        app_gh, installation_id=installation_id, app_id=str(github_app_id), private_key=app_private_key
+    )
     inst_token = token_resp["token"]
     gh = GitHubAPI(session, "bot_async_tasks", oauth_token=inst_token)
     gh_url_runs = f"/repos/{repo_owner}/{repo_name}/check-runs"
