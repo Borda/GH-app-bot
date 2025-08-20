@@ -1,5 +1,5 @@
 gidgethub[aiohttp]
-lightning_sdk >= 2025.07.17
+lightning_sdk >=2025.07.17
 PyYAML
 #py-tree
 

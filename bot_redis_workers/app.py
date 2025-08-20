@@ -5,7 +5,7 @@ import redis
 from aiohttp import ClientSession, web
 from gidgethub import routing, sansio
 
-from bot_commons.utils import _load_validate_required_env_vars
+from _bots_commons.utils import _load_validate_required_env_vars
 from bot_redis_workers import REDIS_QUEUE, REDIS_URL
 from bot_redis_workers.tasks import TaskPhase
 

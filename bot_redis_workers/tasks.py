@@ -14,10 +14,10 @@ from gidgethub.apps import get_installation_access_token
 from lightning_sdk import Job, Status, Teamspace
 from lightning_sdk.lightning_cloud.env import LIGHTNING_CLOUD_URL
 
-from bot_async_tasks.downloads import download_repo_and_extract
-from bot_commons.configs import ConfigFile, ConfigRun, ConfigWorkflow, GitHubRunConclusion, GitHubRunStatus
-from bot_commons.lit_job import finalize_job, job_run
-from bot_commons.utils import (
+from _bots_commons.configs import ConfigFile, ConfigRun, ConfigWorkflow, GitHubRunConclusion, GitHubRunStatus
+from _bots_commons.downloads import download_repo_and_extract
+from _bots_commons.lit_job import finalize_job, job_run
+from _bots_commons.utils import (
     _load_validate_required_env_vars,
     create_jwt_token,
     exceeded_timeout,

@@ -7,9 +7,9 @@ from typing import Any
 
 from lightning_sdk import Job, Machine, Status
 
-from bot_async_tasks.downloads import _RELATIVE_PATH_DOWNLOAD
-from bot_commons.configs import ConfigRun
-from bot_commons.utils import generate_unique_hash
+from _bots_commons.configs import ConfigRun
+from _bots_commons.downloads import _RELATIVE_PATH_DOWNLOAD
+from _bots_commons.utils import generate_unique_hash
 
 BASH_BOX_FUNC = textwrap.dedent("""\
 box(){

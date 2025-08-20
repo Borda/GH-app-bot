@@ -12,10 +12,10 @@ from gidgethub.aiohttp import GitHubAPI
 from lightning_sdk import Status, Teamspace
 from lightning_sdk.lightning_cloud.env import LIGHTNING_CLOUD_URL
 
-from bot_async_tasks.downloads import download_repo_and_extract
-from bot_commons.configs import ConfigFile, ConfigRun, ConfigWorkflow, GitHubRunConclusion, GitHubRunStatus
-from bot_commons.lit_job import finalize_job, job_run
-from bot_commons.utils import (
+from _bots_commons.configs import ConfigFile, ConfigRun, ConfigWorkflow, GitHubRunConclusion, GitHubRunStatus
+from _bots_commons.downloads import download_repo_and_extract
+from _bots_commons.lit_job import finalize_job, job_run
+from _bots_commons.utils import (
     extract_repo_details,
     gh_patch_with_retry,
     gh_post_with_retry,

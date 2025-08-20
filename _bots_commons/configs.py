@@ -9,7 +9,7 @@ from pathlib import Path
 
 import yaml
 
-from bot_commons.utils import sanitize_params_for_env, to_bool
+from _bots_commons.utils import sanitize_params_for_env, to_bool
 
 
 class GitHubRunStatus(Enum):
