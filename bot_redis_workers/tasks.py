@@ -15,7 +15,7 @@ from lightning_sdk import Job, Status, Teamspace
 
 from bot_async_tasks.downloads import download_repo_and_extract
 from bot_commons.configs import ConfigFile, ConfigWorkflow, GitHubRunConclusion, GitHubRunStatus
-from bot_commons.lit_job import job_run
+from bot_commons.lit_job import finalize_job, job_run
 from bot_commons.utils import (
     _load_validate_required_env_vars,
     create_jwt_token,
@@ -23,9 +23,11 @@ from bot_commons.utils import (
     extract_repo_details,
     patch_with_retry,
     post_with_retry,
+    wrap_long_text,
 )
 from bot_redis_workers import REDIS_QUEUE
 
+MAX_OUTPUT_LENGTH = 65525  # GitHub API limit for check-run output.text
 LIT_JOB_QUEUE_TIMEOUT = 60 * 60  # 1 hour
 LIT_STATUS_RUNNING_OR_FINISHED = {Status.Running, Status.Stopping, Status.Completed, Status.Stopped, Status.Failed}
 LOCAL_ROOT_DIR = Path(__file__).parent
@@ -277,8 +279,7 @@ async def process_task(task: dict, redis_client: redis.Redis) -> None:
             f"ci-run_{repo_owner}-{repo_name}-{head_sha[:7]}"
             f"-event-{delivery_id.split('-')[0]}-{run_name.replace(' ', '_')}"
         )
-        try:
-            # Start litJob
+        try:  # Start litJob
             job, logs_separator, exit_separator = await job_run(
                 cfg_file_name=config_run.file_name, config=config_run, gh_token=inst_token, job_name=job_name
             )
@@ -393,20 +394,34 @@ async def process_task(task: dict, redis_client: redis.Redis) -> None:
         return
 
     if task_phase == TaskPhase.RESULTS:
-        # Process logs
-        logs = get_lit_job_logs(task["job_id"])
-        summary = summarize_logs(logs)
+        config_run = task["run_config"]
+        debug_mode = config_run.mode == "debug"
+        job_name = task["job_name"]
+        job_ref = task["job_reference"]
+        lit_job = Job(name=job_ref["name"], teamspace=job_ref["teamspace"], org=job_ref["org"])
+        url_check_id = f"/repos/{repo_owner}/{repo_name}/check-runs/{task['check_id']}"
 
-        # Report to GH (use sync wrapper for async if needed, but here assume sync)
-        # For real, you might need to create a sync GitHubAPI
-        # Placeholder: print summary
-        print(f"PR: {summary}")
-
-        # todo
-        # Actual: Use gidgethub sync or wrap
-        # from gidgethub import GitHubAPI as SyncGH
-        # gh = SyncGH(...)  # Get token similarly
-        # gh.post(...)
+        job_status, exit_code, results = finalize_job(
+            lit_job, logs_hash=task["job_logs_separator"], exit_hash=task["job_exit_separator"], debug=debug_mode
+        )
+        if exit_code is None:  # if the job didn't return an exit code
+            run_conclusion = GitHubRunConclusion.NEUTRAL
+        elif exit_code == 0:  # if the job finished successfully
+            run_conclusion = GitHubRunConclusion.SUCCESS
+        else:  # if the job failed
+            run_conclusion = GitHubRunConclusion.FAILURE
+        results = wrap_long_text(results, text_length=MAX_OUTPUT_LENGTH - 20)  # wrap the results to fit in the output
+        await _post_gh_run_status_update_check(
+            gh=gh,
+            gh_url=url_check_id,
+            run_status=GitHubRunStatus.COMPLETED,
+            run_conclusion=run_conclusion,
+            started_at=task["job_start_time"],
+            url_job=lit_job.link + "&job_detail_tab=logs",
+            summary=f"Job '{job_name}' finished as `{job_status}` with exit code `{exit_code}`.",
+            text=f"```console\n{results or 'No results available'}\n```",
+        )
+        logging.info(log_prefix + f"Job {job_name} finished as `{job_status}` with exit code `{exit_code}`.")
         return
 
     logging.warning(f"Unknown task type: {task_phase}")
