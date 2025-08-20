@@ -123,7 +123,7 @@ async def _post_gh_run_status_not_triggered(
             "head_sha": head_sha,
             "status": "completed",
             "conclusion": "skipped",
-            "started_at": datetime.datetime.utcnow().isoformat() + "Z",
+            "started_at": datetime.utcnow().isoformat() + "Z",
             "output": {
                 "title": "Skipped",
                 "summary": f"Configuration `{cfg_file.name}` is not triggered"

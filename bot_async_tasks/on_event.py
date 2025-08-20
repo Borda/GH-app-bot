@@ -1,8 +1,8 @@
 import asyncio
-import datetime
 import logging
 import shutil
 from collections.abc import Callable
+from datetime import datetime
 from functools import lru_cache, partial
 from pathlib import Path
 from typing import Any
@@ -120,7 +120,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
                 "head_sha": head_sha,
                 "status": "completed",
                 "conclusion": "skipped",
-                "started_at": datetime.datetime.utcnow().isoformat() + "Z",
+                "started_at": datetime.utcnow().isoformat() + "Z",
                 "output": {
                     "title": "No Configs Found",
                     "summary": "No valid configuration files found in `.lightning/workflows` folder.",
@@ -151,7 +151,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
                         "head_sha": head_sha,
                         "status": "completed",
                         "conclusion": "skipped",
-                        "started_at": datetime.datetime.utcnow().isoformat() + "Z",
+                        "started_at": datetime.utcnow().isoformat() + "Z",
                         "output": {
                             "title": "Skipped",
                             "summary": f"Configuration `{cfg_file.name}` is not triggered"
@@ -268,7 +268,7 @@ async def complete_run(
         await fn_patch_check_run(
             data={
                 "status": run_status.value,
-                "started_at": datetime.datetime.utcnow().isoformat() + "Z",
+                "started_at": datetime.utcnow().isoformat() + "Z",
                 "output": {
                     "title": "Job is running",
                     "summary": "Job is running on Lightning Cloud, please wait until it finishes.",
@@ -313,7 +313,7 @@ async def complete_run(
     await fn_patch_check_run(
         data={
             "status": run_status.value,
-            "completed_at": datetime.datetime.utcnow().isoformat() + "Z",
+            "completed_at": datetime.utcnow().isoformat() + "Z",
             "conclusion": run_conclusion.value,
             "output": {
                 "title": "Job results",
