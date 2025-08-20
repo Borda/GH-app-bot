@@ -7,6 +7,7 @@ from bot_redis_workers import REDIS_QUEUE, REDIS_URL
 from bot_redis_workers.tasks import process_task
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
     logging.info("Starting worker...")
 
     # Connect to Redis (shared across workers)

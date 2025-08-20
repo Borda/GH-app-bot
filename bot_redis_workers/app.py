@@ -68,5 +68,6 @@ async def init_app():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
     # run_app accepts either an app instance or coroutine
     web.run_app(init_app(), host="0.0.0.0", port=8080, access_log=None)
