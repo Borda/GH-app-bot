@@ -107,7 +107,7 @@ This phased approach allows workers to handle tasks concurrently. If a worker re
 
    - Create or update a PR in a repo where the GitHub App is installed.
    - Monitor console logs in `app.py` and `worker.py` for enqueue/dequeue actions.
-   - Use `redis-cli` to inspect the queue: `llen bot_queue` (length) or `lrange bot_queue 0 -1` (view tasks).
+     - Use `redis-cli` to inspect the queue: `llen bot_queue` (length) or `lrange bot_queue 0 -1` (view tasks).
    - Simulate restarts: Kill a worker; tasks should be picked up by others.
 
 ## Code Structure

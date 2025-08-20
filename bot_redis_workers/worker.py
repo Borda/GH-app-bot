@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 
@@ -17,7 +18,7 @@ if __name__ == "__main__":
         _, task_json = redis_client.blpop(REDIS_QUEUE)
         task = json.loads(task_json)
         try:
-            process_task(task, redis_client)
+            asyncio.run(process_task(task, redis_client))
         except KeyboardInterrupt:
             break
         except Exception as ex:
