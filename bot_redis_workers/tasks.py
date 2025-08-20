@@ -240,7 +240,9 @@ async def process_task(task: dict, redis_client: redis.Redis) -> None:
         run_name = f"{config_run.file_name} / {config_run.name} ({', '.join(run_params)})"
         # Create a check run
         link_lightning_jobs = f"{LIGHTNING_CLOUD_URL}/{this_teamspace().owner.name}/{this_teamspace().name}/jobs/"
-        check_id = await _post_gh_run_status_create_check(link_lit_jobs=link_lightning_jobs, **post_kwargs)
+        check_id = await _post_gh_run_status_create_check(
+            run_name=run_name, link_lit_jobs=link_lightning_jobs, **post_kwargs
+        )
         url_check_id = f"/repos/{repo_owner}/{repo_name}/check-runs/{check_id}"
         job_name = (
             f"ci-run_{repo_owner}-{repo_name}-{head_sha[:7]}"
