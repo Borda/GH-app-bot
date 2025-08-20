@@ -7,12 +7,6 @@ This guide helps you set up a GitHub App that listens to Pull Requests and trigg
 - Perform an extra task (like config validation or test linting)
 - Complete the check run with `"success"` or `"failure"`
 
-The included bot is launched via:
-
-```bash
-python -m bot_async_tasks
-```
-
 ______________________________________________________________________
 
 ## 🛠 1. Create the GitHub App
@@ -97,21 +91,6 @@ Your bot handles the `pull_request` event and:
 4. Submits the final status with:
    - `conclusion: success` ✅
    - `conclusion: failure` ❌
-
-______________________________________________________________________
-
-## 🧪 6. Run the Bot
-
-Start the bot using:
-
-```bash
-python -m bot_async_tasks
-```
-
-Push or update a PR to your target repo—you should see:
-
-- A Check Run created automatically for the commit
-- The status update in the PR’s “Checks” tab
 
 ______________________________________________________________________
 
