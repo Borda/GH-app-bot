@@ -196,7 +196,7 @@ class ConfigWorkflow(ConfigBase):
     def generate_runs(self) -> Generator["ConfigRun"]:
         """Generate a list of ConfigRun objects from the configuration."""
         for params in self._generate_matrix(self.parametrize):
-            yield ConfigRun(workflow=self.config_body, params=params)
+            yield ConfigRun(config_body=self.config_body, params=params)
 
 
 class ConfigRun(ConfigBase):
@@ -212,64 +212,64 @@ class ConfigRun(ConfigBase):
     @property
     def file_name(self) -> str:
         """Get the name of the configuration."""
-        return self.workflow.get("file_name")
+        return self.config_body.get("file_name")
 
     @property
     def name(self) -> str:
         """Get the name of the configuration."""
-        return self.params.get("name") or self.workflow.get("name", "Lit Job")
+        return self.params.get("name") or self.config_body.get("name", "Lit Job")
 
     @property
     def run(self) -> str:
         """Get the run command."""
-        return self.workflow.get("run", "")
+        return self.config_body.get("run", "")
 
     @property
     def env(self) -> dict:
         """Get the environment variables."""
-        envs = self.workflow.get("env", {})
+        envs = self.config_body.get("env", {})
         envs.update(sanitize_params_for_env(self.params))
         return envs
 
     @property
     def image(self) -> str:
         """Get the machine type."""
-        return self.params.get("image") or self.workflow.get("image", "ubuntu:22.04")
+        return self.params.get("image") or self.config_body.get("image", "ubuntu:22.04")
 
     @property
     def machine(self) -> str:
         """Get the machine type."""
-        return self.params.get("machine") or self.workflow.get("machine", "CPU")
+        return self.params.get("machine") or self.config_body.get("machine", "CPU")
 
     @property
     def interruptible(self) -> bool:
         """Get the interruptible flag."""
-        return to_bool(self.params.get("interruptible") or self.workflow.get("interruptible", False))
+        return to_bool(self.params.get("interruptible") or self.config_body.get("interruptible", False))
 
     @property
     def timeout_minutes(self) -> float:
         """Get the timeout flag."""
-        return float(self.params.get("timeout") or self.workflow.get("timeout", 60))
+        return float(self.params.get("timeout") or self.config_body.get("timeout", 60))
 
     @property
     def repository_owner(self) -> str:
         """Get the repository owner."""
-        return self.workflow.get("repository_owner")
+        return self.config_body.get("repository_owner")
 
     @property
     def repository_name(self) -> str:
         """Get the repository name."""
-        return self.workflow.get("repository_name")
+        return self.config_body.get("repository_name")
 
     @property
     def repository_ref(self) -> str:
         """Get the repository ref."""
-        return self.workflow.get("repository_ref")
+        return self.config_body.get("repository_ref")
 
     @property
     def mode(self) -> str:
         """The mode can be 'info' or 'debug'."""
-        return self.workflow.get("mode", "info")
+        return self.config_body.get("mode", "info")
 
 
 class ConfigFile(ConfigBase):
