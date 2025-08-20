@@ -256,8 +256,11 @@ class ConfigRun(ConfigBase):
     @property
     def env(self) -> dict:
         """Get the environment variables."""
-        envs = self.config_body.get("env", {})
+        envs = deepcopy(self.config_body.get("env", {}))
         envs.update(sanitize_params_for_env(self.params))
+        # extra envs about the environment
+        envs["image"] = self.image
+        envs["machine"] = self.machine
         return envs
 
     @property
