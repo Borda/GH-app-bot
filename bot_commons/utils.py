@@ -4,6 +4,7 @@ import os
 import re
 import time
 import zipfile
+from datetime import datetime, timezone
 from pathlib import Path
 from textwrap import TextWrapper
 from typing import Any
@@ -205,3 +206,35 @@ async def patch_with_retry(gh, url: str, data: dict, retries: int = 3, backoff: 
                 raise
             await asyncio.sleep(backoff * it)
     return None
+
+
+def exceeded_timeout(start_time: str | datetime | float, timeout_secund: float = 10) -> bool:
+    """check if the elapsed time since start_time is greater than timeout_secund.
+
+    Accepts ISO format string with optional trailing Z, datetime or timestamp.
+    >>> time_now = datetime.utcnow().isoformat() + "Z"
+    >>> exceeded_timeout(time_now)
+    False
+    >>> import time
+    >>> time.sleep(1)
+    >>> exceeded_timeout(time_now, timeout_secund=1)
+    True
+    """
+    if isinstance(start_time, str):
+        ts_str = start_time.rstrip("Z")
+        try:
+            dt = datetime.fromisoformat(ts_str)
+            # If the string had a Z, treat it as UTC
+            if start_time.endswith("Z"):
+                dt = dt.replace(tzinfo=timezone.utc)
+        except ValueError:
+            raise ValueError(f"Unrecognized time format: {start_time!r}")
+        start_timestamp = dt.timestamp()
+    elif isinstance(start_time, datetime):
+        start_timestamp = start_time.timestamp()
+    elif isinstance(start_time, (int | float)):
+        start_timestamp = float(start_time)
+    else:
+        raise TypeError(f"start_time must be str, datetime, or float, got {type(start_time).__name__}")
+    elapsed_time = time.time() - start_timestamp
+    return elapsed_time > timeout_secund
