@@ -48,7 +48,16 @@ class ConfigBase(ABC):
 
 
 class ConfigWorkflow(ConfigBase):
-    """Configuration for a run, including matrix generation."""
+    """Configuration for a run, including matrix generation.
+
+    >>> dir_examples = Path(__file__).resolve().parent.parent / "examples"
+    >>> dir_examples.exists()
+    True
+    >>> cfg_files = ConfigFile.load_from_folder(dir_examples)
+    >>> cfg = ConfigWorkflow(cfg_files[0].body)
+    >>> len(list(cfg.generate_runs()))
+    5
+    """
 
     _RESTRICTED_PARAMETERS = ("env", "run")
     config_body: dict
@@ -200,7 +209,25 @@ class ConfigWorkflow(ConfigBase):
 
 
 class ConfigRun(ConfigBase):
-    """Configuration for a run, including matrix generation."""
+    """Configuration for a run, including matrix generation.
+
+    >>> dir_examples = Path(__file__).resolve().parent.parent / "examples"
+    >>> dir_examples.exists()
+    True
+    >>> cfg_files = ConfigFile.load_from_folder(dir_examples)
+    >>> cfg = ConfigWorkflow(cfg_files[0].body)
+    >>> runs = list(cfg.generate_runs())
+    >>> runs[0].name
+    'PR Validation Workflow'
+    >>> runs[0].image
+    'python:3.10-slim-bookworm'
+    >>> from pprint import pprint
+    >>> pprint(runs[0].env)
+    {'HELLO': 'world',
+     'TEST_ENV': 'ci',
+     'image': 'python:3.10-slim-bookworm',
+     'machine': 'CPU'}
+    """
 
     config_body: dict
     params: dict
@@ -294,7 +321,17 @@ class ConfigFile(ConfigBase):
 
     @classmethod
     def load_from_folder(cls, path_dir: str | Path = ".lightning/workflows") -> list["ConfigFile"]:
-        """List all configuration files in the given path."""
+        """List all configuration files in the given path.
+
+        >>> dir_examples = Path(__file__).resolve().parent.parent / "examples"
+        >>> dir_examples.exists()
+        True
+        >>> configs = ConfigFile.load_from_folder(dir_examples)
+        >>> len(configs)
+        1
+        >>> configs[0].name
+        'sample-workflow.yml'
+        """
         path_dir = Path(path_dir).resolve()
         if not path_dir.is_dir():
             raise ValueError(f"Directory '{path_dir}' with expected action config does not exists.")
