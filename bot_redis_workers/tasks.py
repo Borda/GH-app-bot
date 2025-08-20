@@ -137,12 +137,7 @@ async def _post_gh_run_status_create_check(gh, gh_url, head_sha: str, run_name: 
     check = await gh_post_with_retry(
         gh=gh,
         url=gh_url,
-        data={
-            "name": run_name,
-            "head_sha": head_sha,
-            "status": "queued",
-            "details_url": link_lit_jobs,
-        },
+        data={"name": run_name, "head_sha": head_sha, "status": "queued", "details_url": link_lit_jobs},
     )
     return check["id"]
 
@@ -150,30 +145,29 @@ async def _post_gh_run_status_create_check(gh, gh_url, head_sha: str, run_name: 
 async def _post_gh_run_status_update_check(
     gh,
     gh_url: str,
+    title: str,
     run_status: GitHubRunStatus,
-    run_conclusion: GitHubRunConclusion = GitHubRunConclusion.NEUTRAL,
+    run_conclusion: GitHubRunConclusion | None = None,
+    started_at: str = "",
     url_job: str = "",
     summary: str = "",
-    started_at: str = "",
     text: str = "",
 ) -> None:
     if not started_at:
         started_at = datetime.utcnow().isoformat() + "Z"
-    await gh_patch_with_retry(
-        gh=gh,
-        url=gh_url,
-        data={
-            "status": run_status.value,
-            "conclusion": run_conclusion.value,
-            "started_at": started_at,
-            "output": {
-                "title": "Job is running",
-                "summary": summary,
-                "text": text,
-            },
-            "details_url": url_job,
-        },
-    )
+    patch_data = {
+        "status": run_status.value,
+        "started_at": started_at,
+        "output": {"summary": summary},
+        "details_url": url_job,
+    }
+    if title:
+        patch_data["output"].update({"title": title})
+    if text:
+        patch_data["output"].update({"text": text})
+    if run_conclusion:
+        patch_data.update({"conclusion": run_conclusion.value})
+    await gh_patch_with_retry(gh=gh, url=gh_url, data=patch_data)
 
 
 async def process_task_with_session(task: dict, redis_client: redis.Redis) -> None:
@@ -191,11 +185,12 @@ async def process_job_pending(gh, task: dict, lit_job: Job) -> dict | None:
         await _post_gh_run_status_update_check(
             gh=gh,
             gh_url=url_check_id,
+            title="Job has timed out",
             run_status=GitHubRunStatus.COMPLETED,
             run_conclusion=GitHubRunConclusion.CANCELLED,
             started_at=task["job_start_time"],
             url_job=lit_job.link + "&job_detail_tab=logs",
-            summary="Wait for machine availability",
+            summary="Wait for machine availability too long",
             text=f"Job `{job_name}` didn't start within the provided ({LIT_JOB_QUEUE_TIMEOUT}) timeout.",
         )
         return None
@@ -203,11 +198,11 @@ async def process_job_pending(gh, task: dict, lit_job: Job) -> dict | None:
     await _post_gh_run_status_update_check(
         gh=gh,
         gh_url=url_check_id,
+        title="Job is pending",
         run_status=GitHubRunStatus.QUEUED,
         started_at=task["job_start_time"],
         url_job=lit_job.link + "&job_detail_tab=logs",
-        summary="Job is pending",
-        text=f"Job `{job_name}` is waiting for machine availability",
+        summary=f"Job `{job_name}` is waiting for machine availability",
     )
     return task
 
@@ -221,6 +216,7 @@ async def process_job_running(gh, task, lit_job: Job) -> dict | None:
         await _post_gh_run_status_update_check(
             gh=gh,
             gh_url=url_check_id,
+            title="Job has timed out",
             run_status=GitHubRunStatus.COMPLETED,
             run_conclusion=GitHubRunConclusion.CANCELLED,
             started_at=task["job_start_time"],
@@ -237,11 +233,11 @@ async def process_job_running(gh, task, lit_job: Job) -> dict | None:
     await _post_gh_run_status_update_check(
         gh=gh,
         gh_url=url_check_id,
+        title="Job is running",
         run_status=GitHubRunStatus.IN_PROGRESS,
         started_at=task["job_start_time"],
         url_job=lit_job.link + "&job_detail_tab=logs",
-        summary="Job is running",
-        text=f"Job `{job_name}` is running on Lightning Cloud",
+        summary=f"Job `{job_name}` is running on Lightning Cloud",
     )
     return task
 
@@ -330,6 +326,7 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
             await _post_gh_run_status_update_check(
                 gh=gh,
                 gh_url=url_check_id,
+                title="Failed to run litJob",
                 run_status=GitHubRunStatus.COMPLETED,
                 run_conclusion=GitHubRunConclusion.FAILURE,
                 url_job=link_lightning_jobs,
@@ -341,6 +338,7 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
         task.update({
             "phase": TaskPhase.WAIT_JOB.value,
             "check_id": check_id,
+            "run_name": run_name,
             "job_reference": {"name": job.name, "teamspace": job.teamspace.name, "org": job.teamspace.owner.name},
             "job_name": job_name,
             "job_status": job.status.value,
@@ -402,6 +400,7 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
         await _post_gh_run_status_update_check(
             gh=gh,
             gh_url=url_check_id,
+            title="Job finished",
             run_status=GitHubRunStatus.COMPLETED,
             run_conclusion=run_conclusion,
             started_at=task["job_start_time"],
@@ -412,4 +411,4 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
         logging.info(log_prefix + f"Job {job_name} finished as `{job_status}` with exit code `{exit_code}`.")
         return
 
-    logging.warning(f"Unknown task type: {task_phase}")
+    logging.error(f"Unknown task type: {task_phase}")
