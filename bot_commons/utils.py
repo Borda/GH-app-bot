@@ -184,7 +184,7 @@ def extract_repo_details(event_type: str, payload: dict) -> tuple[str, str, str,
     return repo_owner, repo_name, head_sha, branch_ref
 
 
-async def post_with_retry(gh, url: str, data: dict, retries: int = 3, backoff: float = 1.0) -> Any:
+async def gh_post_with_retry(gh, url: str, data: dict, retries: int = 3, backoff: float = 1.0) -> Any:
     """Post data to GitHub API with retries in case of connection issues."""
     for it in range(1, retries + 1):
         try:
@@ -196,7 +196,7 @@ async def post_with_retry(gh, url: str, data: dict, retries: int = 3, backoff: f
     return None
 
 
-async def patch_with_retry(gh, url: str, data: dict, retries: int = 3, backoff: float = 1.0) -> Any:
+async def gh_patch_with_retry(gh, url: str, data: dict, retries: int = 3, backoff: float = 1.0) -> Any:
     """Post data to GitHub API with retries in case of connection issues."""
     for it in range(1, retries + 1):
         try:

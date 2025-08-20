@@ -22,8 +22,8 @@ from bot_commons.utils import (
     create_jwt_token,
     exceeded_timeout,
     extract_repo_details,
-    patch_with_retry,
-    post_with_retry,
+    gh_patch_with_retry,
+    gh_post_with_retry,
     wrap_long_text,
 )
 from bot_redis_workers import REDIS_QUEUE
@@ -94,7 +94,7 @@ def push_to_redis(redis_client: redis.Redis, task: dict):
 
 
 async def _post_gh_run_status_missing_configs(gh, gh_url, head_sha: str, text: str) -> None:
-    await post_with_retry(
+    await gh_post_with_retry(
         gh=gh,
         url=gh_url,
         data={
@@ -115,7 +115,7 @@ async def _post_gh_run_status_missing_configs(gh, gh_url, head_sha: str, text: s
 async def _post_gh_run_status_not_triggered(
     gh, gh_url, head_sha: str, event_type: str, branch_ref: str, cfg_file: ConfigFile, config: ConfigWorkflow
 ) -> None:
-    await post_with_retry(
+    await gh_post_with_retry(
         gh=gh,
         url=gh_url,
         data={
@@ -134,7 +134,7 @@ async def _post_gh_run_status_not_triggered(
 
 
 async def _post_gh_run_status_create_check(gh, gh_url, head_sha: str, run_name: str, link_lit_jobs: str) -> str:
-    check = await post_with_retry(
+    check = await gh_post_with_retry(
         gh=gh,
         url=gh_url,
         data={
@@ -159,7 +159,7 @@ async def _post_gh_run_status_update_check(
 ) -> None:
     if not started_at:
         started_at = datetime.utcnow().isoformat() + "Z"
-    await patch_with_retry(
+    await gh_patch_with_retry(
         gh=gh,
         url=gh_url,
         data={

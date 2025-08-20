@@ -17,8 +17,8 @@ from bot_commons.configs import ConfigFile, ConfigRun, ConfigWorkflow, GitHubRun
 from bot_commons.lit_job import finalize_job, job_run
 from bot_commons.utils import (
     extract_repo_details,
-    patch_with_retry,
-    post_with_retry,
+    gh_patch_with_retry,
+    gh_post_with_retry,
     wrap_long_text,
 )
 
@@ -79,7 +79,7 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
     repo_owner, repo_name, head_sha, branch_ref = extract_repo_details(event.event, event.data)
     link_lightning_jobs = f"{LIGHTNING_CLOUD_URL}/{this_teamspace().owner.name}/{this_teamspace().name}/jobs/"
     # Create a partial function for posting check runs
-    post_check = partial(post_with_retry, gh=gh, url=f"/repos/{repo_owner}/{repo_name}/check-runs")
+    post_check = partial(gh_post_with_retry, gh=gh, url=f"/repos/{repo_owner}/{repo_name}/check-runs")
     config_files, config_error = [], None
     log_prefix = f"{repo_owner}/{repo_name}::{head_sha[:7]}::{event.event}::\t"
 
@@ -205,7 +205,7 @@ async def patch_check_run(token: str, url: str, data: dict, retries: int = 3, ba
     timeout = ClientTimeout(total=retries)
     async with ClientSession(timeout=timeout) as session:
         gh_api = GitHubAPI(session, "bot_async_tasks", oauth_token=token)
-        return patch_with_retry(gh_api, url, data, retries=retries, backoff=backoff)
+        return gh_patch_with_retry(gh_api, url, data, retries=retries, backoff=backoff)
 
 
 async def complete_run(
