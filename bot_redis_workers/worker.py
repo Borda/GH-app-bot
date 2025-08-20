@@ -22,7 +22,7 @@ if __name__ == "__main__":
         except KeyboardInterrupt:
             break
         except Exception as ex:
-            logging.error(f"Error processing task {json.dumps(task, indent=4, sort_keys=True)}: {ex}")
+            logging.error(f"Error processing task {ex!s} with {json.dumps(task, indent=4, sort_keys=True)}")
         else:
             logging.debug(f"Successfully processed task: {task}")
 
