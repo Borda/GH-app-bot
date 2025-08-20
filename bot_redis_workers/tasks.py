@@ -230,12 +230,12 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
                 )
                 continue
             # Generate configs
-            counter = 0
+            count = 0
             for config_run in config.generate_runs():
                 task.update({"phase": TaskPhase.START_JOB.value, "run_config": config_run.to_dict()})
                 push_to_redis(redis_client, task)
-                counter += 1
-            logging.info(log_prefix + f"Enqueued {len(counter)} jobs for config '{cfg_file.name}'")
+                count += 1
+            logging.info(log_prefix + f"Enqueued {count} jobs for config '{cfg_file.name}'")
         return
 
     if task_phase == TaskPhase.START_JOB:
