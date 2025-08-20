@@ -196,7 +196,7 @@ async def process_task(task: dict, redis_client: redis.Redis) -> None:
     post_kwargs = {"gh": gh, "gh_url": gh_url_runs, "head_sha": head_sha}
 
     if task_phase == TaskPhase.NEW_EVENT:
-        config_files, config_dir, config_error = generate_run_configs(
+        config_files, config_dir, config_error = await generate_run_configs(
             event_type=event_type, delivery_id=delivery_id, payload=payload, auth_token=inst_token
         )
         if not config_files:
