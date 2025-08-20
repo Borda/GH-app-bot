@@ -23,6 +23,7 @@ if __name__ == "__main__":
             break
         except Exception as ex:
             logging.error(f"Error processing task {ex!s} with {json.dumps(task, indent=4, sort_keys=True)}")
+            redis_client.rpush(REDIS_QUEUE, json.dumps(task))
         else:
             logging.debug(f"Successfully processed task: {task}")
 
