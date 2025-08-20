@@ -24,10 +24,10 @@ async def handle_code_event(event, redis_client):
     repo_name = payload["repository"]["name"]
     if event.event == "pull_request":
         pr_number = payload["pull_request"]["number"]
-        logging.info(f"Enqueued new_event for PR {repo_owner}/{repo_name}#{pr_number}")
+        logging.info(f"Enqueued new_event for `PR` \t{repo_owner}/{repo_name}#{pr_number}")
     elif event.event == "push":
         commit_sha = payload["after"]
-        logging.info(f"Enqueued new_event for push {repo_owner}/{repo_name}@{commit_sha[:7]}")
+        logging.info(f"Enqueued new_event for `push` \t{repo_owner}/{repo_name}@{commit_sha[:7]}")
 
 
 async def main(request):
