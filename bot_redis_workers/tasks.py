@@ -85,7 +85,7 @@ async def generate_run_configs(
             logging.info(log_prefix + f"Cleaning up the repo directory: {repo_dir}")
             shutil.rmtree(repo_dir, ignore_errors=True)
     else:
-        logging.warn(log_prefix + "Failed to extract `.lightning` folder from repo.")
+        logging.warning(log_prefix + "Failed to extract `.lightning` folder from repo.")
     return config_files, config_dir, config_error
 
 
@@ -272,7 +272,7 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
             event_type=event_type, delivery_id=delivery_id, payload=payload, auth_token=inst_token
         )
         if not config_files:
-            logging.warn(log_prefix + f"No valid configs found in {config_dir}")
+            logging.warning(log_prefix + f"No valid configs found in {config_dir}")
             text_error = (
                 f"```console\n{config_error!s}\n```" if config_error else "No specific error details available."
             )
