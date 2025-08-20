@@ -330,7 +330,7 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
             logging.debug(log_prefix + f"Job {job_name} still pending, re-enqueued")
             return
 
-        if lit_job.status not in LIT_STATUS_RUNNING:
+        if lit_job.status in LIT_STATUS_RUNNING:
             if exceeded_timeout(task["job_start_time"], timeout_secund=config_run.timeout_minutes * 60):
                 lit_job.stop()
                 await _post_gh_run_status_update_check(
@@ -366,7 +366,7 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
             logging.debug(log_prefix + f"Job {job_name} status changed to {lit_job.status.value}, re-enqueued")
             return
 
-        assert lit_job.status in LIT_STATUS_FINISHED
+        assert lit_job.status in LIT_STATUS_FINISHED, f"'{lit_job.status}' is not a finished as `{LIT_STATUS_FINISHED}`"
         task.update({"phase": TaskPhase.RESULTS.value})
         # Update status to QUEUED, so it will be processed in the next iteration
         push_to_redis(redis_client, task)
