@@ -1,12 +1,16 @@
+import asyncio
 import hashlib
 import os
 import re
 import time
 import zipfile
+from datetime import datetime, timezone
 from pathlib import Path
 from textwrap import TextWrapper
+from typing import Any
 
 import jwt
+from aiohttp import client_exceptions
 
 
 def generate_unique_hash(length=16, params: dict | None = None) -> str:
@@ -163,3 +167,74 @@ def create_jwt_token(github_app_id: int, app_private_key: str) -> str:
         app_private_key,
         algorithm="RS256",
     )
+
+
+def extract_repo_details(event_type: str, payload: dict) -> tuple[str, str, str, str]:
+    """Extract the repository owner, name, head SHA, and branch ref from the event payload."""
+    if event_type == "push":
+        head_sha = payload["after"]
+        branch_ref = payload["ref"][len("refs/heads/") :]
+    elif event_type == "pull_request":
+        head_sha = payload["pull_request"]["head"]["sha"]
+        branch_ref = payload["pull_request"]["base"]["ref"]
+    else:
+        raise ValueError(f"Unsupported event type: {event_type}")
+    repo_owner = payload["repository"]["owner"]["login"]
+    repo_name = payload["repository"]["name"]
+    return repo_owner, repo_name, head_sha, branch_ref
+
+
+async def gh_post_with_retry(gh, url: str, data: dict, retries: int = 3, backoff: float = 1.0) -> Any:
+    """Post data to GitHub API with retries in case of connection issues."""
+    for it in range(1, retries + 1):
+        try:
+            return await gh.post(url, data=data)
+        except client_exceptions.ServerDisconnectedError:
+            if it == retries:
+                raise
+            await asyncio.sleep(backoff * it)
+    return None
+
+
+async def gh_patch_with_retry(gh, url: str, data: dict, retries: int = 3, backoff: float = 1.0) -> Any:
+    """Post data to GitHub API with retries in case of connection issues."""
+    for it in range(1, retries + 1):
+        try:
+            return await gh.patch(url, data=data)
+        except client_exceptions.ServerDisconnectedError:
+            if it == retries:
+                raise
+            await asyncio.sleep(backoff * it)
+    return None
+
+
+def exceeded_timeout(start_time: str | datetime | float, timeout_secund: float = 10) -> bool:
+    """check if the elapsed time since start_time is greater than timeout_secund.
+
+    Accepts ISO format string with optional trailing Z, datetime or timestamp.
+    >>> time_now = datetime.utcnow().isoformat() + "Z"
+    >>> exceeded_timeout(time_now)
+    False
+    >>> import time
+    >>> time.sleep(1)
+    >>> exceeded_timeout(time_now, timeout_secund=1)
+    True
+    """
+    if isinstance(start_time, str):
+        ts_str = start_time.rstrip("Z")
+        try:
+            dt = datetime.fromisoformat(ts_str)
+            # If the string had a Z, treat it as UTC
+            if start_time.endswith("Z"):
+                dt = dt.replace(tzinfo=timezone.utc)
+        except ValueError:
+            raise ValueError(f"Unrecognized time format: {start_time!r}")
+        start_timestamp = dt.timestamp()
+    elif isinstance(start_time, datetime):
+        start_timestamp = start_time.timestamp()
+    elif isinstance(start_time, (int | float)):
+        start_timestamp = float(start_time)
+    else:
+        raise TypeError(f"start_time must be str, datetime, or float, got {type(start_time).__name__}")
+    elapsed_time = time.time() - start_timestamp
+    return elapsed_time > timeout_secund

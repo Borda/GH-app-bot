@@ -42,7 +42,7 @@ async def download_repo_and_extract(
     repo_owner: str,
     repo_name: str,
     git_ref: str,
-    token: str,
+    auth_token: str,
     folder_path: str | Path,
     subfolder: str = "",
     suffix: str = "",
@@ -50,7 +50,7 @@ async def download_repo_and_extract(
     """Download a GitHub repository at a specific ref (branch, tag, commit) and extract it to a temp directory."""
     # 1) Fetch zipball archive
     url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/zipball/{git_ref}"
-    headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
+    headers = {"Authorization": f"Bearer {auth_token}", "Accept": "application/vnd.github+json"}
     async with aiohttp.ClientSession() as session, session.get(url, headers=headers) as resp:
         resp.raise_for_status()
         archive_data = await resp.read()
@@ -112,7 +112,7 @@ async def cli_download_repo_and_extract() -> None:
         repo_owner=repo_owner,
         repo_name=repo_name,
         git_ref=repo_ref,
-        token=token,
+        auth_token=token,
         folder_path=temp_dir,
     )
     if not repo_path:

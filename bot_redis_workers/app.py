@@ -10,16 +10,24 @@ from bot_redis_workers import REDIS_QUEUE, REDIS_URL
 from bot_redis_workers.tasks import TaskPhase
 
 
-async def handle_pr_event(event, redis_client):
+async def handle_code_event(event, redis_client):
     payload = event.data
     task = {
-        "type": event.event,
+        "delivery_id": event.delivery_id,
+        "event_type": event.event,
         "phase": TaskPhase.NEW_EVENT.value,
         "payload": payload,
     }
     # Use the Redis client from app context
     redis_client.rpush(REDIS_QUEUE, json.dumps(task))
-    print(f"Enqueued new_event for PR #{payload['pull_request']['number']}")
+    repo_owner = payload["repository"]["owner"]["login"]
+    repo_name = payload["repository"]["name"]
+    if event.event == "pull_request":
+        pr_number = payload["pull_request"]["number"]
+        logging.info(f"Enqueued new_event for `PR` \t{repo_owner}/{repo_name}#{pr_number}")
+    elif event.event == "push":
+        commit_sha = payload["after"]
+        logging.info(f"Enqueued new_event for `push` \t{repo_owner}/{repo_name}@{commit_sha[:7]}")
 
 
 async def main(request):
@@ -50,7 +58,8 @@ async def init_app():
 
     # Create a GitHub routing router
     router = routing.Router()
-    router.add(handle_pr_event, event_type="pull_request", action="synchronize")
+    router.add(handle_code_event, event_type="push")
+    router.add(handle_code_event, event_type="pull_request", action="synchronize")
 
     # Create the aiohttp application
     app = web.Application()
@@ -64,5 +73,6 @@ async def init_app():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
     # run_app accepts either an app instance or coroutine
     web.run_app(init_app(), host="0.0.0.0", port=8080, access_log=None)

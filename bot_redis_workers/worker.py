@@ -1,12 +1,15 @@
+import asyncio
 import json
 import logging
+import traceback
 
 import redis
 
 from bot_redis_workers import REDIS_QUEUE, REDIS_URL
-from bot_redis_workers.tasks import process_task
+from bot_redis_workers.tasks import process_task_with_session
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
     logging.info("Starting worker...")
 
     # Connect to Redis (shared across workers)
@@ -16,11 +19,14 @@ if __name__ == "__main__":
         _, task_json = redis_client.blpop(REDIS_QUEUE)
         task = json.loads(task_json)
         try:
-            process_task(task, redis_client)
+            asyncio.run(process_task_with_session(task, redis_client))
         except KeyboardInterrupt:
+            redis_client.rpush(REDIS_QUEUE, json.dumps(task))
             break
         except Exception as ex:
-            logging.error(f"Error processing task {json.dumps(task, indent=4, sort_keys=True)}: {ex}")
+            # with {json.dumps(task, indent=4, sort_keys=True)}
+            logging.error(f"Error processing task: \n\t{ex!r}\n{traceback.format_exc()}")
+            redis_client.rpush(REDIS_QUEUE, json.dumps(task))
         else:
             logging.debug(f"Successfully processed task: {task}")
 
