@@ -196,7 +196,7 @@ class ConfigWorkflow(ConfigBase):
     def generate_runs(self) -> Generator["ConfigRun"]:
         """Generate a list of ConfigRun objects from the configuration."""
         for params in self._generate_matrix(self.parametrize):
-            yield ConfigRun(config_body=self.config_body, params=params)
+            yield ConfigRun(config_body=self.config_body, params=params, file_name=self.file_name)
 
 
 class ConfigRun(ConfigBase):
@@ -204,15 +204,12 @@ class ConfigRun(ConfigBase):
 
     config_body: dict
     params: dict
+    file_name: str
 
-    def __init__(self, config_body: dict, params: dict):
+    def __init__(self, config_body: dict, params: dict, file_name: str):
         self.config_body = deepcopy(config_body)
         self.params = {k: v for k, v in params.items() if k not in ConfigWorkflow._RESTRICTED_PARAMETERS}
-
-    @property
-    def file_name(self) -> str:
-        """Get the name of the configuration."""
-        return self.config_body.get("file_name")
+        self.file_name = file_name
 
     @property
     def name(self) -> str:

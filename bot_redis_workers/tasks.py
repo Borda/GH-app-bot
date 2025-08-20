@@ -1,6 +1,7 @@
 import json
 import logging
 import shutil
+import traceback
 from datetime import datetime
 from enum import Enum
 from functools import lru_cache
@@ -258,11 +259,8 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
                 cfg_file_name=config_run.file_name, config=config_run, gh_token=inst_token, job_name=job_name
             )
         except Exception as ex:
-            if debug_mode:
-                text = f"```console\n{ex!s}\n```"
-            else:
-                text = "No specific error details available."
-                logging.error(f"Failed to run job `{job_name}`: {ex!s}")
+            logging.error(f"Failed to run job `{job_name}`: {ex!s}\n{traceback.format_exc()}")
+            text = f"```console\n{ex!s}\n```" if debug_mode else "No specific error details available."
             await _post_gh_run_status_update_check(
                 gh=gh,
                 gh_url=url_check_id,
