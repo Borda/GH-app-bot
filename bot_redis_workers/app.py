@@ -5,7 +5,7 @@ import redis
 from aiohttp import ClientSession, web
 from gidgethub import routing, sansio
 
-from _bots_commons.utils import _load_validate_required_env_vars
+from _bots_commons.utils import _load_validate_required_env_vars, extract_repo_details
 from bot_redis_workers import REDIS_QUEUE, REDIS_URL
 from bot_redis_workers.tasks import TaskPhase
 
@@ -19,9 +19,12 @@ async def handle_code_event(event, redis_client):
         "payload": payload,
     }
     # Use the Redis client from app context
+    repo_owner, repo_name, head_sha, _ = extract_repo_details(event.event, payload)
+    # skip if the SHA is ful of zeros
+    if set(head_sha) == {"0"}:
+        logging.warning(f"Skipping event for {repo_owner}/{repo_name} with zero SHA: {head_sha}")
+        return
     redis_client.rpush(REDIS_QUEUE, json.dumps(task))
-    repo_owner = payload["repository"]["owner"]["login"]
-    repo_name = payload["repository"]["name"]
     if event.event == "pull_request":
         pr_number = payload["pull_request"]["number"]
         logging.info(f"Enqueued new_event for `PR` \t{repo_owner}/{repo_name}#{pr_number}")
