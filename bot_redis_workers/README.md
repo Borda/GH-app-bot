@@ -1,8 +1,11 @@
 # GitHub App Bot with Redis Queue and Workers
 
-This repository contains a refactored GitHub App bot that integrates with GitHub webhooks to handle events like pull requests. It uses a Redis queue for task management, making the bot restart-resistant and scalable with a pool of workers. The bot processes tasks in phases: handling new events, starting jobs (using Lightning Jobs as placeholders), waiting for job completion, and processing results to report back to GitHub.
+This repository contains a refactored GitHub App bot that integrates with GitHub webhooks to handle events like pull requests.
+It uses a Redis queue for task management, making the bot restart-resistant and scalable with a pool of workers.
+The bot processes tasks in phases: handling new events, starting jobs (using Lightning Jobs as placeholders), waiting for job completion, and processing results to report back to GitHub.
 
-The code is written in Python and uses `gidgethub[aiohttp]` for webhook handling, `redis-py` for queuing, and other minimal dependencies. Placeholders are included for Lightning Job (litJob) logic—replace these with your actual implementation from the original `py_bot`.
+The code is written in Python and uses `gidgethub[aiohttp]` for webhook handling, `redis-py` for queuing, and other minimal dependencies.
+Placeholders are included for Lightning Job (litJob) logic—replace these with your actual implementation from the original `py_bot`.
 
 ## Features
 
