@@ -196,17 +196,17 @@ class ConfigWorkflow(ConfigBase):
     def generate_runs(self) -> Generator["ConfigRun"]:
         """Generate a list of ConfigRun objects from the configuration."""
         for params in self._generate_matrix(self.parametrize):
-            yield ConfigRun(workflow=self, params=params)
+            yield ConfigRun(workflow=self.config_body, params=params)
 
 
 class ConfigRun(ConfigBase):
     """Configuration for a run, including matrix generation."""
 
-    workflow: dict
+    config_body: dict
     params: dict
 
-    def __init__(self, workflow: ConfigWorkflow, params: dict):
-        self.workflow = deepcopy(workflow.config_body)
+    def __init__(self, config_body: dict, params: dict):
+        self.config_body = deepcopy(config_body)
         self.params = {k: v for k, v in params.items() if k not in ConfigWorkflow._RESTRICTED_PARAMETERS}
 
     @property
