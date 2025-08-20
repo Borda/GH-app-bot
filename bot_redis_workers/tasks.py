@@ -14,7 +14,7 @@ from lightning_cloud.env import LIGHTNING_CLOUD_URL
 from lightning_sdk import Job, Status, Teamspace
 
 from bot_async_tasks.downloads import download_repo_and_extract
-from bot_commons.configs import ConfigFile, ConfigWorkflow, GitHubRunConclusion, GitHubRunStatus
+from bot_commons.configs import ConfigFile, ConfigRun, ConfigWorkflow, GitHubRunConclusion, GitHubRunStatus
 from bot_commons.lit_job import finalize_job, job_run
 from bot_commons.utils import (
     _load_validate_required_env_vars,
@@ -226,14 +226,14 @@ async def process_task(task: dict, redis_client: redis.Redis) -> None:
             # Generate configs
             counter = 0
             for config_run in config.generate_runs():
-                task.update({"phase": TaskPhase.START_JOB.value, "run_config": config_run})
+                task.update({"phase": TaskPhase.START_JOB.value, "run_config": config_run.to_dict()})
                 push_to_redis(redis_client, task)
                 counter += 1
             logging.info(log_prefix + f"Enqueued {len(counter)} jobs for config '{cfg_file.name}'")
         return
 
     if task_phase == TaskPhase.START_JOB:
-        config_run = task["run_config"]
+        config_run = ConfigRun(**task["run_config"])
         debug_mode = config_run.mode == "debug"
         logging.info(log_prefix + f"Starting litJob for config '{config_run.name}'")
         run_params = [p or "n/a" for p in config_run.params.values()]
@@ -286,7 +286,7 @@ async def process_task(task: dict, redis_client: redis.Redis) -> None:
         return
 
     if task_phase == TaskPhase.WAIT_JOB:
-        config_run = task["run_config"]
+        config_run = ConfigRun(**task["run_config"])
         job_name = task["job_name"]
         job_ref = task["job_reference"]
         lit_job = Job(name=job_ref["name"], teamspace=job_ref["teamspace"], org=job_ref["org"])
@@ -361,7 +361,7 @@ async def process_task(task: dict, redis_client: redis.Redis) -> None:
         return
 
     if task_phase == TaskPhase.RESULTS:
-        config_run = task["run_config"]
+        config_run = ConfigRun(**task["run_config"])
         debug_mode = config_run.mode == "debug"
         job_name = task["job_name"]
         job_ref = task["job_reference"]

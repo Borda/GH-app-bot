@@ -20,6 +20,7 @@ if __name__ == "__main__":
         try:
             asyncio.run(process_task(task, redis_client))
         except KeyboardInterrupt:
+            redis_client.rpush(REDIS_QUEUE, json.dumps(task))
             break
         except Exception as ex:
             logging.error(f"Error processing task: \n\t{ex!s}")  # with {json.dumps(task, indent=4, sort_keys=True)}

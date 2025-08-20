@@ -1,6 +1,7 @@
 import glob
 import itertools
 import logging
+from abc import ABC
 from collections.abc import Generator
 from copy import deepcopy
 from enum import Enum
@@ -31,34 +32,49 @@ class GitHubRunConclusion(Enum):
     ACTION_REQUIRED = "action_required"
 
 
-class ConfigWorkflow:
+class ConfigBase(ABC):
+    def to_dict(self) -> dict:
+        """Convert to a JSON-serializable dictionary using only attributes."""
+        result = {}
+
+        # Get only instance attributes, not properties or methods
+        for attr_name in vars(self):
+            value = getattr(self, attr_name)
+            # Only include JSON-serializable types
+            if isinstance(value, (str | int | float | bool | list | dict | type(None))):
+                result[attr_name] = value
+
+        return result
+
+
+class ConfigWorkflow(ConfigBase):
     """Configuration for a run, including matrix generation."""
 
     _RESTRICTED_PARAMETERS = ("env", "run")
-    _data: dict
+    config_body: dict
     file_name: str
 
-    def __init__(self, config: dict, file_name: str = ""):
-        self._data = config
+    def __init__(self, config_body: dict, file_name: str = ""):
+        self.config_body = config_body
         self.file_name = file_name
 
     @property
     def name(self) -> str:
         """Get the name of the configuration."""
-        return self._data.get("name", "Lit Job")
+        return self.config_body.get("name", "Lit Job")
 
     @property
     def trigger(self) -> dict | list | None:
         """Get the trigger for the configuration."""
-        return self._data.get("trigger", [])
+        return self.config_body.get("trigger", [])
 
     def is_triggered_by_event(self, event: str, branch: str) -> bool:
         """Check if the event is triggered by a code change."""
-        return self._is_triggered_by_event(event, branch, self._data.get("trigger"))
+        return self._is_triggered_by_event(event, branch, self.config_body.get("trigger"))
 
     def append_repo_details(self, repo_owner: str, repo_name: str, head_sha: str, branch_ref: str) -> None:
         """Append repository details to the configuration."""
-        self._data.update({
+        self.config_body.update({
             "repository_owner": repo_owner,
             "repository_name": repo_name,
             "repository_ref": head_sha,
@@ -175,85 +191,88 @@ class ConfigWorkflow:
     @property
     def parametrize(self) -> dict:
         """Get the parametrize section of the configuration."""
-        return self._data.get("parametrize", {})
+        return self.config_body.get("parametrize", {})
 
     def generate_runs(self) -> Generator["ConfigRun"]:
         """Generate a list of ConfigRun objects from the configuration."""
         for params in self._generate_matrix(self.parametrize):
-            yield ConfigRun(config=self, params=params)
+            yield ConfigRun(workflow=self, params=params)
 
 
-class ConfigRun:
+class ConfigRun(ConfigBase):
     """Configuration for a run, including matrix generation."""
 
-    _data: dict
+    workflow: dict
     params: dict
-    file_name: str
 
-    def __init__(self, config: ConfigWorkflow, params: dict):
-        self._data = deepcopy(config._data)
+    def __init__(self, workflow: ConfigWorkflow, params: dict):
+        self.workflow = deepcopy(workflow.config_body)
         self.params = {k: v for k, v in params.items() if k not in ConfigWorkflow._RESTRICTED_PARAMETERS}
-        self.file_name = config.file_name
+
+    @property
+    def file_name(self) -> str:
+        """Get the name of the configuration."""
+        return self.workflow.get("file_name")
 
     @property
     def name(self) -> str:
         """Get the name of the configuration."""
-        return self.params.get("name") or self._data.get("name", "Lit Job")
+        return self.params.get("name") or self.workflow.get("name", "Lit Job")
 
     @property
     def run(self) -> str:
         """Get the run command."""
-        return self._data.get("run", "")
+        return self.workflow.get("run", "")
 
     @property
     def env(self) -> dict:
         """Get the environment variables."""
-        envs = self._data.get("env", {})
+        envs = self.workflow.get("env", {})
         envs.update(sanitize_params_for_env(self.params))
         return envs
 
     @property
     def image(self) -> str:
         """Get the machine type."""
-        return self.params.get("image") or self._data.get("image", "ubuntu:22.04")
+        return self.params.get("image") or self.workflow.get("image", "ubuntu:22.04")
 
     @property
     def machine(self) -> str:
         """Get the machine type."""
-        return self.params.get("machine") or self._data.get("machine", "CPU")
+        return self.params.get("machine") or self.workflow.get("machine", "CPU")
 
     @property
     def interruptible(self) -> bool:
         """Get the interruptible flag."""
-        return to_bool(self.params.get("interruptible") or self._data.get("interruptible", False))
+        return to_bool(self.params.get("interruptible") or self.workflow.get("interruptible", False))
 
     @property
     def timeout_minutes(self) -> float:
         """Get the timeout flag."""
-        return float(self.params.get("timeout") or self._data.get("timeout", 60))
+        return float(self.params.get("timeout") or self.workflow.get("timeout", 60))
 
     @property
     def repository_owner(self) -> str:
         """Get the repository owner."""
-        return self._data.get("repository_owner")
+        return self.workflow.get("repository_owner")
 
     @property
     def repository_name(self) -> str:
         """Get the repository name."""
-        return self._data.get("repository_name")
+        return self.workflow.get("repository_name")
 
     @property
     def repository_ref(self) -> str:
         """Get the repository ref."""
-        return self._data.get("repository_ref")
+        return self.workflow.get("repository_ref")
 
     @property
     def mode(self) -> str:
         """The mode can be 'info' or 'debug'."""
-        return self._data.get("mode", "info")
+        return self.workflow.get("mode", "info")
 
 
-class ConfigFile:
+class ConfigFile(ConfigBase):
     """Configuration file representation."""
 
     path: Path
@@ -266,18 +285,18 @@ class ConfigFile:
         try:  # todo: add specific exception and yaml validation
             content = self.path.read_text(encoding="utf_8")
             config = yaml.safe_load(content)
-        except yaml.YAMLError as e:
-            raise RuntimeError(f"YAML parsing error in config file: {e!s}")
-        except OSError as e:
-            raise RuntimeError(f"File error while reading config: {e!s}")
+        except yaml.YAMLError as err:
+            raise RuntimeError(f"YAML parsing error in config file: {err!s}")
+        except OSError as err:
+            raise RuntimeError(f"File error while reading config: {err!s}")
         if not isinstance(config, dict):
             raise ValueError(f"Invalid config file format: {self.path}")
         if not config:
             raise ValueError(f"Empty config file: {self.path}")
         self.body = config
 
-    @staticmethod
-    def load_from_folder(path_dir: str | Path = ".lightning/workflows") -> list["ConfigFile"]:
+    @classmethod
+    def load_from_folder(cls, path_dir: str | Path = ".lightning/workflows") -> list["ConfigFile"]:
         """List all configuration files in the given path."""
         path_dir = Path(path_dir).resolve()
         if not path_dir.is_dir():
@@ -286,4 +305,4 @@ class ConfigFile:
         ls_files = glob.glob(str(path_dir / "*.yaml")) + glob.glob(str(path_dir / "*.yml"))
         if not ls_files:
             return []
-        return [ConfigFile(cfg_path) for cfg_path in sorted(ls_files)]
+        return [cls(cfg_path) for cfg_path in sorted(ls_files)]
