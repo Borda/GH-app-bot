@@ -11,8 +11,8 @@ import redis
 from aiohttp import ClientSession
 from gidgethub.aiohttp import GitHubAPI
 from gidgethub.apps import get_installation_access_token
-from lightning_cloud.env import LIGHTNING_CLOUD_URL
 from lightning_sdk import Job, Status, Teamspace
+from lightning_sdk.lightning_cloud.env import LIGHTNING_CLOUD_URL
 
 from bot_async_tasks.downloads import download_repo_and_extract
 from bot_commons.configs import ConfigFile, ConfigRun, ConfigWorkflow, GitHubRunConclusion, GitHubRunStatus
@@ -182,6 +182,70 @@ async def process_task_with_session(task: dict, redis_client: redis.Redis) -> No
         await _process_task_inner(task, redis_client, session)
 
 
+async def process_job_pending(gh, task: dict, lit_job: Job) -> dict | None:
+    config_run = ConfigRun(**task["run_config"])
+    job_name = task["job_name"]
+    url_check_id = f"/repos/{config_run.repository_owner}/{config_run.repository_name}/check-runs/{task['check_id']}"
+    if exceeded_timeout(task["job_start_time"], timeout_secund=LIT_JOB_QUEUE_TIMEOUT):
+        lit_job.stop()
+        await _post_gh_run_status_update_check(
+            gh=gh,
+            gh_url=url_check_id,
+            run_status=GitHubRunStatus.COMPLETED,
+            run_conclusion=GitHubRunConclusion.CANCELLED,
+            started_at=task["job_start_time"],
+            url_job=lit_job.link + "&job_detail_tab=logs",
+            summary="Wait for machine availability",
+            text=f"Job `{job_name}` didn't start within the provided ({LIT_JOB_QUEUE_TIMEOUT}) timeout.",
+        )
+        return None
+
+    await _post_gh_run_status_update_check(
+        gh=gh,
+        gh_url=url_check_id,
+        run_status=GitHubRunStatus.QUEUED,
+        started_at=task["job_start_time"],
+        url_job=lit_job.link + "&job_detail_tab=logs",
+        summary="Job is pending",
+        text=f"Job `{job_name}` is waiting for machine availability",
+    )
+    return task
+
+
+async def process_job_running(gh, task, lit_job: Job) -> dict | None:
+    config_run = ConfigRun(**task["run_config"])
+    job_name = task["job_name"]
+    url_check_id = f"/repos/{config_run.repository_owner}/{config_run.repository_name}/check-runs/{task['check_id']}"
+    if exceeded_timeout(task["job_start_time"], timeout_secund=config_run.timeout_minutes * 60):
+        lit_job.stop()
+        await _post_gh_run_status_update_check(
+            gh=gh,
+            gh_url=url_check_id,
+            run_status=GitHubRunStatus.COMPLETED,
+            run_conclusion=GitHubRunConclusion.CANCELLED,
+            started_at=task["job_start_time"],
+            url_job=lit_job.link + "&job_detail_tab=logs",
+            summary="Job exceeded timeout limit.",
+            text=f"Job `{job_name}` didn't finish within the provided ({config_run.timeout_minutes}) minutes.",
+        )
+        return None
+
+    # case when it switched from pending to running, so last time it was not running
+    if Status(task["job_status"]) not in LIT_STATUS_RUNNING_OR_FINISHED:
+        task.update({"job_status": lit_job.status.value, "job_start_time": datetime.utcnow().isoformat() + "Z"})
+
+    await _post_gh_run_status_update_check(
+        gh=gh,
+        gh_url=url_check_id,
+        run_status=GitHubRunStatus.IN_PROGRESS,
+        started_at=task["job_start_time"],
+        url_job=lit_job.link + "&job_detail_tab=logs",
+        summary="Job is running",
+        text=f"Job `{job_name}` is running on Lightning Cloud",
+    )
+    return task
+
+
 async def _process_task_inner(task: dict, redis_client: redis.Redis, session) -> None:
     task_phase = TaskPhase(task["phase"])
     event_type = task["event_type"]
@@ -277,11 +341,7 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
         task.update({
             "phase": TaskPhase.WAIT_JOB.value,
             "check_id": check_id,
-            "job_reference": {
-                "name": job.name,
-                "teamspace": job.teamspace.name,
-                "org": job.teamspace.owner.name,
-            },
+            "job_reference": {"name": job.name, "teamspace": job.teamspace.name, "org": job.teamspace.owner.name},
             "job_name": job_name,
             "job_status": job.status.value,
             "job_start_time": datetime.utcnow().isoformat() + "Z",
@@ -293,75 +353,23 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
         return
 
     if task_phase == TaskPhase.WAIT_JOB:
-        config_run = ConfigRun(**task["run_config"])
         job_name = task["job_name"]
         job_ref = task["job_reference"]
         lit_job = Job(name=job_ref["name"], teamspace=job_ref["teamspace"], org=job_ref["org"])
-        url_check_id = f"/repos/{repo_owner}/{repo_name}/check-runs/{task['check_id']}"
         if lit_job.status not in LIT_STATUS_RUNNING_OR_FINISHED:
-            if exceeded_timeout(task["job_start_time"], timeout_secund=LIT_JOB_QUEUE_TIMEOUT):
-                lit_job.stop()
-                await _post_gh_run_status_update_check(
-                    gh=gh,
-                    gh_url=url_check_id,
-                    run_status=GitHubRunStatus.COMPLETED,
-                    run_conclusion=GitHubRunConclusion.CANCELLED,
-                    started_at=task["job_start_time"],
-                    url_job=lit_job.link + "&job_detail_tab=logs",
-                    summary="Wait for machine availability",
-                    text=f"Job `{job_name}` didn't start within the provided ({LIT_JOB_QUEUE_TIMEOUT}) timeout.",
-                )
-                logging.warning(
-                    log_prefix + f"Job {job_name} didn't start within the provided ({LIT_JOB_QUEUE_TIMEOUT}) timeout, "
-                    "marking as cancelled."
-                )
+            task = await process_job_pending(gh=gh, task=task, lit_job=lit_job)
+            if task is None:
+                logging.warning(log_prefix + f"Job {job_name} didn't start within the provided timeout.")
                 return
-
-            await _post_gh_run_status_update_check(
-                gh=gh,
-                gh_url=url_check_id,
-                run_status=GitHubRunStatus.QUEUED,
-                started_at=task["job_start_time"],
-                url_job=lit_job.link + "&job_detail_tab=logs",
-                summary="Job is pending",
-                text=f"Job `{job_name}` is waiting for machine availability",
-            )
             push_to_redis(redis_client, task)
             logging.debug(log_prefix + f"Job {job_name} still pending, re-enqueued")
             return
 
         if lit_job.status in LIT_STATUS_RUNNING:
-            if exceeded_timeout(task["job_start_time"], timeout_secund=config_run.timeout_minutes * 60):
-                lit_job.stop()
-                await _post_gh_run_status_update_check(
-                    gh=gh,
-                    gh_url=url_check_id,
-                    run_status=GitHubRunStatus.COMPLETED,
-                    run_conclusion=GitHubRunConclusion.CANCELLED,
-                    started_at=task["job_start_time"],
-                    url_job=lit_job.link + "&job_detail_tab=logs",
-                    summary="Job exceeded timeout limit.",
-                    text=f"Job `{job_name}` didn't finish within the provided ({config_run.timeout_minutes}) minutes.",
-                )
-                logging.warning(
-                    log_prefix
-                    + f"Job {job_name} didn't finish within the provided ({config_run.timeout_minutes}) minutes."
-                )
+            task = await process_job_running(gh=gh, task=task, lit_job=lit_job)
+            if task is None:
+                logging.warning(log_prefix + f"Job {job_name} didn't finish within the provided timeout.")
                 return
-
-            # case when it switched from pending to running, so last time it was not running
-            if Status(task["job_status"]) not in LIT_STATUS_RUNNING_OR_FINISHED:
-                task.update({"job_status": lit_job.status.value, "job_start_time": datetime.utcnow().isoformat() + "Z"})
-
-            await _post_gh_run_status_update_check(
-                gh=gh,
-                gh_url=url_check_id,
-                run_status=GitHubRunStatus.IN_PROGRESS,
-                started_at=task["job_start_time"],
-                url_job=lit_job.link + "&job_detail_tab=logs",
-                summary="Job is running",
-                text=f"Job `{job_name}` is running on Lightning Cloud",
-            )
             push_to_redis(redis_client, task)
             logging.debug(log_prefix + f"Job {job_name} status changed to {lit_job.status.value}, re-enqueued")
             return
