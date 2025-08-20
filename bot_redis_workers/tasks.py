@@ -49,39 +49,6 @@ def this_teamspace() -> Teamspace:
     return Teamspace()
 
 
-# Placeholder functions - replace with your actual litJob (Lightning Job) logic
-def start_lit_job(config, repo_path):
-    # Start a Lightning job with the config
-    # e.g., job = LightningWork(... config ...)
-    # Return a job_id
-    print(f"Starting litJob with config {config} in repo {repo_path}")
-    return "dummy_job_id"  # Replace with actual
-
-
-def check_lit_job_status(job_id):
-    # Check status: 'running', 'finished', 'failed'
-    print(f"Checking status of litJob {job_id}")
-    return "finished"  # Placeholder
-
-
-def get_lit_job_logs(job_id):
-    # Get logs
-    print(f"Getting logs for litJob {job_id}")
-    return "dummy logs"  # Placeholder
-
-
-def summarize_logs(logs):
-    # Summarize
-    print(f"Summarizing logs: {logs}")
-    return "Summary: All good!"  # Placeholder
-
-
-async def post_to_github(gh, repo_full_name, pr_number, comment):
-    # Post comment to PR
-    print(f"Posting comment to PR #{pr_number} in repo {repo_full_name}: {comment}")
-    await gh.post(f"/repos/{repo_full_name}/issues/{pr_number}/comments", data={"body": comment})
-
-
 # Generate run configs
 async def generate_run_configs(
     event_type: str, delivery_id: str, payload: dict, auth_token: str

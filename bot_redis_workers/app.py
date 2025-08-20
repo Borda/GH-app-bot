@@ -20,7 +20,10 @@ async def handle_pr_event(event, redis_client):
     }
     # Use the Redis client from app context
     redis_client.rpush(REDIS_QUEUE, json.dumps(task))
-    print(f"Enqueued new_event for PR #{payload['pull_request']['number']}")
+    pr_number = payload["pull_request"]["number"]
+    repo_owner = payload["repository"]["owner"]["login"]
+    repo_name = payload["repository"]["name"]
+    logging.info(f"Enqueued new_event for PR {repo_owner}/{repo_name}#{pr_number}")
 
 
 async def main(request):
