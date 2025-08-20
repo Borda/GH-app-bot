@@ -208,8 +208,8 @@ async def gh_patch_with_retry(gh, url: str, data: dict, retries: int = 3, backof
     return None
 
 
-def exceeded_timeout(start_time: str | datetime | float, timeout_secund: float = 10) -> bool:
-    """check if the elapsed time since start_time is greater than timeout_secund.
+def exceeded_timeout(start_time: str | datetime | float, timeout_seconds: float = 10) -> bool:
+    """check if the elapsed time since start_time is greater than timeout.
 
     Accepts ISO format string with optional trailing Z, datetime or timestamp.
     >>> time_now = datetime.utcnow().isoformat() + "Z"
@@ -217,7 +217,7 @@ def exceeded_timeout(start_time: str | datetime | float, timeout_secund: float =
     False
     >>> import time
     >>> time.sleep(1)
-    >>> exceeded_timeout(time_now, timeout_secund=1)
+    >>> exceeded_timeout(time_now, timeout_seconds=1)
     True
     """
     if isinstance(start_time, str):
@@ -237,4 +237,4 @@ def exceeded_timeout(start_time: str | datetime | float, timeout_secund: float =
     else:
         raise TypeError(f"start_time must be str, datetime, or float, got {type(start_time).__name__}")
     elapsed_time = time.time() - start_timestamp
-    return elapsed_time > timeout_secund
+    return elapsed_time > timeout_seconds

@@ -186,7 +186,7 @@ async def process_job_pending(gh, task: dict, lit_job: Job) -> dict | None:
     config_run = ConfigRun(**task["run_config"])
     job_name = task["job_name"]
     url_check_id = f"/repos/{config_run.repository_owner}/{config_run.repository_name}/check-runs/{task['check_id']}"
-    if exceeded_timeout(task["job_start_time"], timeout_secund=LIT_JOB_QUEUE_TIMEOUT):
+    if exceeded_timeout(task["job_start_time"], timeout_seconds=LIT_JOB_QUEUE_TIMEOUT):
         lit_job.stop()
         await _post_gh_run_status_update_check(
             gh=gh,
@@ -216,7 +216,7 @@ async def process_job_running(gh, task, lit_job: Job) -> dict | None:
     config_run = ConfigRun(**task["run_config"])
     job_name = task["job_name"]
     url_check_id = f"/repos/{config_run.repository_owner}/{config_run.repository_name}/check-runs/{task['check_id']}"
-    if exceeded_timeout(task["job_start_time"], timeout_secund=config_run.timeout_minutes * 60):
+    if exceeded_timeout(task["job_start_time"], timeout_seconds=config_run.timeout_minutes * 60):
         lit_job.stop()
         await _post_gh_run_status_update_check(
             gh=gh,
