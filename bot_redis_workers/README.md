@@ -5,7 +5,6 @@ It uses a Redis queue for task management, making the bot restart-resistant and 
 The bot processes tasks in phases: handling new events, starting jobs (using Lightning Jobs as placeholders), waiting for job completion, and processing results to report back to GitHub.
 
 The code is written in Python and uses `gidgethub[aiohttp]` for webhook handling, `redis-py` for queuing, and other minimal dependencies.
-Placeholders are included for Lightning Job (litJob) logic—replace these with your actual implementation from the original `py_bot`.
 
 ## Features
 
@@ -126,9 +125,3 @@ This phased approach allows workers to handle tasks concurrently. If a worker re
 - **Redis Connection**: If using remote Redis, update `REDIS_URL` and check firewall/port 6379.
 - **GitHub API Limits**: Monitor rate limits; use app authentication properly.
 - **Customizations**: Replace placeholders in `tasks.py` with your litJob code. Add error handling/logging as needed.
-
-## Contributing
-
-Fork the repo, make changes, and submit a PR. For issues, open a GitHub issue.
-
-Built based on the original `py_bot` from https://github.com/Borda/GitHub-app-bot.
