@@ -30,7 +30,9 @@ from bot_redis_workers import REDIS_QUEUE
 
 MAX_OUTPUT_LENGTH = 65525  # GitHub API limit for check-run output.text
 LIT_JOB_QUEUE_TIMEOUT = 60 * 60  # 1 hour
-LIT_STATUS_RUNNING_OR_FINISHED = {Status.Running, Status.Stopping, Status.Completed, Status.Stopped, Status.Failed}
+LIT_STATUS_RUNNING = {Status.Running, Status.Stopping}
+LIT_STATUS_FINISHED = {Status.Completed, Status.Stopped, Status.Failed}
+LIT_STATUS_RUNNING_OR_FINISHED = LIT_STATUS_RUNNING | LIT_STATUS_FINISHED
 LOCAL_ROOT_DIR = Path(__file__).parent
 LOCAL_TEMP_DIR = LOCAL_ROOT_DIR / ".temp"
 
@@ -298,6 +300,7 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
         url_check_id = f"/repos/{repo_owner}/{repo_name}/check-runs/{task['check_id']}"
         if lit_job.status not in LIT_STATUS_RUNNING_OR_FINISHED:
             if exceeded_timeout(task["job_start_time"], timeout_secund=LIT_JOB_QUEUE_TIMEOUT):
+                lit_job.stop()
                 await _post_gh_run_status_update_check(
                     gh=gh,
                     gh_url=url_check_id,
@@ -327,9 +330,29 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
             logging.debug(log_prefix + f"Job {job_name} still pending, re-enqueued")
             return
 
-        # case when it switched from pending to running
-        if Status(task["job_status"]) not in LIT_STATUS_RUNNING_OR_FINISHED:
-            task.update({"job_status": lit_job.status.value, "job_start_time": datetime.utcnow().isoformat() + "Z"})
+        if lit_job.status not in LIT_STATUS_RUNNING:
+            if exceeded_timeout(task["job_start_time"], timeout_secund=config_run.timeout_minutes * 60):
+                lit_job.stop()
+                await _post_gh_run_status_update_check(
+                    gh=gh,
+                    gh_url=url_check_id,
+                    run_status=GitHubRunStatus.COMPLETED,
+                    run_conclusion=GitHubRunConclusion.CANCELLED,
+                    started_at=task["job_start_time"],
+                    url_job=lit_job.link + "&job_detail_tab=logs",
+                    summary="Job exceeded timeout limit.",
+                    text=f"Job `{job_name}` didn't finish within the provided ({config_run.timeout_minutes}) minutes.",
+                )
+                logging.warning(
+                    log_prefix
+                    + f"Job {job_name} didn't finish within the provided ({config_run.timeout_minutes}) minutes."
+                )
+                return
+
+            # case when it switched from pending to running, so last time it was not running
+            if Status(task["job_status"]) not in LIT_STATUS_RUNNING_OR_FINISHED:
+                task.update({"job_status": lit_job.status.value, "job_start_time": datetime.utcnow().isoformat() + "Z"})
+
             await _post_gh_run_status_update_check(
                 gh=gh,
                 gh_url=url_check_id,
@@ -343,22 +366,7 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
             logging.debug(log_prefix + f"Job {job_name} status changed to {lit_job.status.value}, re-enqueued")
             return
 
-        if exceeded_timeout(task["job_start_time"], timeout_secund=config_run.timeout_minutes * 60):
-            await _post_gh_run_status_update_check(
-                gh=gh,
-                gh_url=url_check_id,
-                run_status=GitHubRunStatus.COMPLETED,
-                run_conclusion=GitHubRunConclusion.CANCELLED,
-                started_at=task["job_start_time"],
-                url_job=lit_job.link + "&job_detail_tab=logs",
-                summary="Job exceeded timeout limit.",
-                text=f"Job `{job_name}` didn't finish within the provided ({config_run.timeout_minutes}) minutes.",
-            )
-            logging.warning(
-                log_prefix + f"Job {job_name} didn't finish within the provided ({config_run.timeout_minutes}) minutes."
-            )
-            return
-
+        assert lit_job.status in LIT_STATUS_FINISHED
         task.update({"phase": TaskPhase.RESULTS.value})
         # Update status to QUEUED, so it will be processed in the next iteration
         push_to_redis(redis_client, task)
