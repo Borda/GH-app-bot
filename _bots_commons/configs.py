@@ -50,10 +50,10 @@ class ConfigBase(ABC):
 class ConfigWorkflow(ConfigBase):
     """Configuration for a run, including matrix generation.
 
-    >>> path_examples = Path(__file__).resolve().parent.parent / "examples"
-    >>> path_examples.exists()
+    >>> dir_examples = Path(__file__).resolve().parent.parent / "examples"
+    >>> dir_examples.exists()
     True
-    >>> cfg_files = ConfigFile.load_from_folder(path_examples)
+    >>> cfg_files = ConfigFile.load_from_folder(dir_examples)
     >>> cfg = ConfigWorkflow(cfg_files[0].body)
     >>> len(list(cfg.generate_runs()))
     5
@@ -211,10 +211,10 @@ class ConfigWorkflow(ConfigBase):
 class ConfigRun(ConfigBase):
     """Configuration for a run, including matrix generation.
 
-    >>> path_examples = Path(__file__).resolve().parent.parent / "examples"
-    >>> path_examples.exists()
+    >>> dir_examples = Path(__file__).resolve().parent.parent / "examples"
+    >>> dir_examples.exists()
     True
-    >>> cfg_files = ConfigFile.load_from_folder(path_examples)
+    >>> cfg_files = ConfigFile.load_from_folder(dir_examples)
     >>> cfg = ConfigWorkflow(cfg_files[0].body)
     >>> runs = list(cfg.generate_runs())
     >>> runs[0].name
@@ -323,10 +323,10 @@ class ConfigFile(ConfigBase):
     def load_from_folder(cls, path_dir: str | Path = ".lightning/workflows") -> list["ConfigFile"]:
         """List all configuration files in the given path.
 
-        >>> path_examples = Path(__file__).resolve().parent.parent / "examples"
-        >>> path_examples.exists()
+        >>> dir_examples = Path(__file__).resolve().parent.parent / "examples"
+        >>> dir_examples.exists()
         True
-        >>> configs = ConfigFile.load_from_folder(path_examples)
+        >>> configs = ConfigFile.load_from_folder(dir_examples)
         >>> len(configs)
         1
         >>> configs[0].name
