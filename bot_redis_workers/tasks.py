@@ -55,7 +55,14 @@ def this_teamspace() -> Teamspace:
 
 # @lru_cache # NOTE: this can't be cached as it won't properly update job's status
 def _restore_lit_job_from_task(job_ref: dict) -> Job:
-    """Extract litJob from task."""
+    """Extract litJob from task.
+
+    Args:
+        job_ref: The reference to the job, dict with keys "name", "teamspace", "org".
+
+    Returns:
+        The restored litJob.
+    """
     return Job(name=job_ref["name"], teamspace=job_ref["teamspace"], org=job_ref["org"])
 
 
@@ -63,6 +70,18 @@ def _restore_lit_job_from_task(job_ref: dict) -> Job:
 async def generate_run_configs(
     event_type: str, delivery_id: str, payload: dict, auth_token: str, log_prefix: str
 ) -> tuple[list[ConfigFile], Path | None, Exception | None]:
+    """Generate run configs for the given event.
+
+    Args:
+        event_type: The type of the event.
+        delivery_id: The delivery ID of the event.
+        payload: The payload of the event.
+        auth_token: The authentication token for the GitHub API.
+        log_prefix: The prefix to use for logging.
+
+    Returns:
+        A tuple containing the list of config files, the directory containing the config files, and the error.
+    """
     repo_owner, repo_name, head_sha, branch_ref = extract_repo_details(event_type, payload)
     config_files, config_dir, config_error = [], None, None
 
@@ -95,10 +114,19 @@ async def generate_run_configs(
 
 
 def push_to_redis(redis_client: redis.Redis, task: dict):
+    """Push task to Redis queue.
+
+    Args:
+        redis_client: The Redis client instance.
+        task: The task to push.
+    """
+    # todo: replace with Celery so you can set some time for staying in the queue
+    #  and so limit nb requests for example when waiting
     redis_client.rpush(REDIS_QUEUE, json.dumps(task))
 
 
 async def _post_gh_run_status_missing_configs(gh, gh_url, head_sha: str, text: str) -> None:
+    """Post a GitHub run status with missing configs."""
     await gh_post_with_retry(
         gh=gh,
         url=gh_url,
@@ -120,6 +148,7 @@ async def _post_gh_run_status_missing_configs(gh, gh_url, head_sha: str, text: s
 async def _post_gh_run_status_not_triggered(
     gh, gh_url, head_sha: str, event_type: str, branch_ref: str, cfg_file: ConfigFile, config: ConfigWorkflow
 ) -> None:
+    """Post a GitHub run status with missing configs."""
     await gh_post_with_retry(
         gh=gh,
         url=gh_url,
@@ -139,6 +168,7 @@ async def _post_gh_run_status_not_triggered(
 
 
 async def _post_gh_run_status_create_check(gh, gh_url, head_sha: str, run_name: str, link_lit_jobs: str) -> str:
+    """Create a GitHub run status."""
     check = await gh_post_with_retry(
         gh=gh,
         url=gh_url,
@@ -163,6 +193,7 @@ async def _post_gh_run_status_update_check(
     summary: str = "",
     text: str = "",
 ) -> None:
+    """Update a GitHub run status."""
     if not started_at:
         started_at = datetime.utcnow().isoformat() + "Z"
     patch_data = {
@@ -187,6 +218,7 @@ async def process_task_with_session(task: dict, redis_client: redis.Redis) -> No
 
 
 async def process_job_pending(gh, task: dict, lit_job: Job) -> dict:
+    """Check the status of a yet pending job and validate waiting time."""
     config_run = ConfigRun(**task["run_config"])
     job_name = task["job_name"]
     url_check_id = f"/repos/{config_run.repository_owner}/{config_run.repository_name}/check-runs/{task['check_id']}"
@@ -219,6 +251,7 @@ async def process_job_pending(gh, task: dict, lit_job: Job) -> dict:
 
 
 async def process_job_running(gh, task, lit_job: Job) -> dict:
+    """Check the status of a running job and validate running time."""
     config_run = ConfigRun(**task["run_config"])
     job_name = task["job_name"]
     url_check_id = f"/repos/{config_run.repository_owner}/{config_run.repository_name}/check-runs/{task['check_id']}"
@@ -268,6 +301,7 @@ async def _get_gh_app_token(session, payload: dict) -> str:
 
 
 async def _process_task_inner(task: dict, redis_client: redis.Redis, session) -> None:
+    """This is the main function that processes a task with phases."""
     task_phase = TaskPhase(task["phase"])
     event_type = task["event_type"]
     payload = task["payload"]
