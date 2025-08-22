@@ -417,7 +417,7 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
     if task_phase == TaskPhase.FAILURE:
         job_name = task["job_name"]
         job_ref = task["job_reference"]
-        lit_job = Job(name=job_ref["name"], teamspace=job_ref["teamspace"], org=job_ref["org"])
+        job_name, job_ref, lit_job = _extract_lit_job_from_task(task)
         if lit_job.status in LIT_STATUS_FINISHED:
             # todo: send notification to the user
             return
@@ -425,4 +425,4 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
         logging.debug(log_prefix + f"Job {job_name} still stopping, re-enqueued")
         return
 
-    raise RuntimeError(f"Unknown task phase: {task_phase}")
+    raise RuntimeError(f"Unknown task type: {task_phase}")
