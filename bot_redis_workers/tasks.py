@@ -53,7 +53,7 @@ def this_teamspace() -> Teamspace:
     return Teamspace()
 
 
-@lru_cache
+# @lru_cache # NOTE: this caot be cached as it won't properly update status
 def _restore_lit_job_from_task(job_ref: dict) -> Job:
     """Extract litJob from task."""
     return Job(name=job_ref["name"], teamspace=job_ref["teamspace"], org=job_ref["org"])
@@ -107,8 +107,8 @@ async def _post_gh_run_status_missing_configs(gh, gh_url, head_sha: str, text: s
         data={
             "name": "Lit bot",
             "head_sha": head_sha,
-            "status": "completed",
-            "conclusion": "skipped",
+            "status": GitHubRunStatus.COMPLETED.value,
+            "conclusion": GitHubRunConclusion.SKIPPED.value,
             "started_at": datetime.utcnow().isoformat() + "Z",
             "output": {
                 "title": "No Configs Found",
@@ -128,8 +128,8 @@ async def _post_gh_run_status_not_triggered(
         data={
             "name": f"{cfg_file.name} / {config.name} [{event_type}]",
             "head_sha": head_sha,
-            "status": "completed",
-            "conclusion": "skipped",
+            "status": GitHubRunStatus.COMPLETED.value,
+            "conclusion": GitHubRunConclusion.SKIPPED.value,
             "started_at": datetime.utcnow().isoformat() + "Z",
             "output": {
                 "title": "Skipped",
@@ -144,7 +144,12 @@ async def _post_gh_run_status_create_check(gh, gh_url, head_sha: str, run_name: 
     check = await gh_post_with_retry(
         gh=gh,
         url=gh_url,
-        data={"name": run_name, "head_sha": head_sha, "status": "queued", "details_url": link_lit_jobs},
+        data={
+            "name": run_name,
+            "head_sha": head_sha,
+            "status": GitHubRunStatus.QUEUED.value,
+            "details_url": link_lit_jobs,
+        },
     )
     return check["id"]
 
