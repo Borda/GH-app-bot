@@ -53,7 +53,7 @@ def this_teamspace() -> Teamspace:
     return Teamspace()
 
 
-# @lru_cache # NOTE: this caot be cached as it won't properly update status
+# @lru_cache # NOTE: this can't be cached as it won't properly update job's status
 def _restore_lit_job_from_task(job_ref: dict) -> Job:
     """Extract litJob from task."""
     return Job(name=job_ref["name"], teamspace=job_ref["teamspace"], org=job_ref["org"])
@@ -61,11 +61,10 @@ def _restore_lit_job_from_task(job_ref: dict) -> Job:
 
 # Generate run configs
 async def generate_run_configs(
-    event_type: str, delivery_id: str, payload: dict, auth_token: str
+    event_type: str, delivery_id: str, payload: dict, auth_token: str, log_prefix: str
 ) -> tuple[list[ConfigFile], Path | None, Exception | None]:
     repo_owner, repo_name, head_sha, branch_ref = extract_repo_details(event_type, payload)
     config_files, config_dir, config_error = [], None, None
-    log_prefix = f"{repo_owner}/{repo_name}::{head_sha[:7]}::{event_type}::\t"
 
     # 1) Download the repository at the specified ref
     repo_dir = await download_repo_and_extract(
@@ -74,7 +73,6 @@ async def generate_run_configs(
         git_ref=head_sha,
         auth_token=auth_token,
         folder_path=LOCAL_TEMP_DIR,
-        # extract only the `.lightning` subfolder
         subfolder=".lightning",  # extract only `.lightning` subfolder
         suffix=f"event-{delivery_id}",
     )
@@ -256,14 +254,8 @@ async def process_job_running(gh, task, lit_job: Job) -> dict:
     return task
 
 
-async def _process_task_inner(task: dict, redis_client: redis.Redis, session) -> None:
-    task_phase = TaskPhase(task["phase"])
-    event_type = task["event_type"]
-    payload = task["payload"]
-    delivery_id = task["delivery_id"]
-    repo_owner, repo_name, head_sha, branch_ref = extract_repo_details(event_type=event_type, payload=payload)
-    log_prefix = f"{repo_owner}/{repo_name}::{head_sha[:7]}::{task['event_type']}::\t"
-
+async def _get_gh_app_token(session, payload: dict) -> str:
+    """Get GitHub App token for the installation."""
     github_app_id, app_private_key, webhook_secret = _load_validate_required_env_vars()
     jwt_token = create_jwt_token(github_app_id=github_app_id, app_private_key=app_private_key)
     # Exchange JWT for installation token
@@ -272,14 +264,29 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
     token_resp = await get_installation_access_token(
         app_gh, installation_id=installation_id, app_id=str(github_app_id), private_key=app_private_key
     )
-    inst_token = token_resp["token"]
+    return token_resp["token"]
+
+
+async def _process_task_inner(task: dict, redis_client: redis.Redis, session) -> None:
+    task_phase = TaskPhase(task["phase"])
+    event_type = task["event_type"]
+    payload = task["payload"]
+    delivery_id = task["delivery_id"]
+    repo_owner, repo_name, head_sha, branch_ref = extract_repo_details(event_type=event_type, payload=payload)
+    log_prefix = f"{repo_owner}/{repo_name}::{head_sha[:7]}::{task['event_type']}::\t"
+
+    inst_token = await _get_gh_app_token(session, payload=payload)
     gh = GitHubAPI(session, "bot_async_tasks", oauth_token=inst_token)
     gh_url_runs = f"/repos/{repo_owner}/{repo_name}/check-runs"
     post_kwargs = {"gh": gh, "gh_url": gh_url_runs, "head_sha": head_sha}
 
     if task_phase == TaskPhase.NEW_EVENT:
         config_files, config_dir, config_error = await generate_run_configs(
-            event_type=event_type, delivery_id=delivery_id, payload=payload, auth_token=inst_token
+            event_type=event_type,
+            delivery_id=delivery_id,
+            payload=payload,
+            auth_token=inst_token,
+            log_prefix=log_prefix,
         )
         if not config_files:
             logging.warning(log_prefix + f"No valid configs found in {config_dir}")
@@ -366,7 +373,7 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
 
     if task_phase == TaskPhase.WAIT_JOB:
         job_name = task["job_name"]
-        lit_job = _restore_lit_job_from_task(task["job_reference"])
+        lit_job = _restore_lit_job_from_task(job_ref=task["job_reference"])
         if lit_job.status not in LIT_STATUS_RUNNING_OR_FINISHED:
             task = await process_job_pending(gh=gh, task=task, lit_job=lit_job)
             if TaskPhase(task["phase"]) == TaskPhase.FAILURE:
@@ -396,7 +403,7 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
         config_run = ConfigRun(**task["run_config"])
         debug_mode = config_run.mode == "debug"
         job_name = task["job_name"]
-        lit_job = _restore_lit_job_from_task(task["job_reference"])
+        lit_job = _restore_lit_job_from_task(job_ref=task["job_reference"])
         url_check_id = f"/repos/{repo_owner}/{repo_name}/check-runs/{task['check_id']}"
 
         job_status, exit_code, results = finalize_job(
@@ -425,10 +432,9 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
 
     if task_phase == TaskPhase.FAILURE:
         job_name = task["job_name"]
-        job_ref = task["job_reference"]
-        job_name, job_ref, lit_job = _restore_lit_job_from_task(task)
+        lit_job = _restore_lit_job_from_task(job_ref=task["job_reference"])
         if lit_job.status in LIT_STATUS_FINISHED:
-            # todo: send notification to the user
+            # todo: some extra staff if required
             return
         push_to_redis(redis_client, task)
         logging.debug(log_prefix + f"Job {job_name} still stopping, re-enqueued")
