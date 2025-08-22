@@ -359,7 +359,7 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
         lit_job = Job(name=job_ref["name"], teamspace=job_ref["teamspace"], org=job_ref["org"])
         if lit_job.status not in LIT_STATUS_RUNNING_OR_FINISHED:
             task = await process_job_pending(gh=gh, task=task, lit_job=lit_job)
-            if TaskPhase(task["phase"]) is TaskPhase.FAILURE:
+            if TaskPhase(task["phase"]) == TaskPhase.FAILURE:
                 logging.warning(log_prefix + f"Job {job_name} didn't start within the provided timeout.")
             else:
                 logging.debug(log_prefix + f"Job {job_name} still pending, re-enqueued")
@@ -368,16 +368,16 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
 
         if lit_job.status in LIT_STATUS_RUNNING:
             task = await process_job_running(gh=gh, task=task, lit_job=lit_job)
-            if TaskPhase(task["phase"]) is TaskPhase.FAILURE:
+            if TaskPhase(task["phase"]) == TaskPhase.FAILURE:
                 logging.warning(log_prefix + f"Job {job_name} didn't finish within the provided timeout.")
             else:
-                logging.debug(log_prefix + f"Job {job_name} status changed to {lit_job.status.value}, re-enqueued")
+                logging.debug(log_prefix + f"Job {job_name} still running, re-enqueued")
             push_to_redis(redis_client, task)
             return
 
         assert lit_job.status in LIT_STATUS_FINISHED, f"'{lit_job.status}' is not a finished as `{LIT_STATUS_FINISHED}`"
-        task.update({"phase": TaskPhase.RESULTS.value})
         # Update status to QUEUED, so it will be processed in the next iteration
+        task.update({"phase": TaskPhase.RESULTS.value})
         push_to_redis(redis_client, task)
         logging.info(log_prefix + f"Enqueued results for job '{job_name}'")
         return
@@ -415,7 +415,14 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
         return
 
     if task_phase == TaskPhase.FAILURE:
-        # todo: send notification to the user
+        job_name = task["job_name"]
+        job_ref = task["job_reference"]
+        lit_job = Job(name=job_ref["name"], teamspace=job_ref["teamspace"], org=job_ref["org"])
+        if lit_job.status in LIT_STATUS_FINISHED:
+            # todo: send notification to the user
+            return
+        push_to_redis(redis_client, task)
+        logging.debug(log_prefix + f"Job {job_name} still stopping, re-enqueued")
         return
 
     raise RuntimeError(f"Unknown task phase: {task_phase}")
