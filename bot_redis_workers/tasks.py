@@ -301,7 +301,47 @@ async def _get_gh_app_token(session, payload: dict) -> str:
 
 
 async def _process_task_inner(task: dict, redis_client: redis.Redis, session) -> None:
-    """This is the main function that processes a task with phases."""
+    """This is the main function that processes a task with phases.
+
+    Key Multipliers:
+    ================
+    1. Event → Config Files (1:N relationship)
+       - Single event can trigger multiple .yaml/.yml config files
+       - Each config file in .lightning/workflows/ folder is processed
+       - Configs are filtered by event type and branch triggers
+
+    2. Config File → Job Runs (1:M relationship)
+       - Each config can have multiple workflow definitions
+       - Each workflow can generate multiple runs based on parameters
+       - Matrix builds, parameter combinations, etc.
+
+    3. Job Run → Lightning AI Job (1:1 relationship)
+       - Each job run creates exactly one Lightning AI job
+       - Jobs are queued independently in Redis
+       - Each job has its own lifecycle (START_JOB → WAIT_JOB → RESULTS)
+
+    Example Scenario:
+    ================
+    GitHub Push Event → 3 Config Files → 8 Total Jobs
+    ├─ ci.yml (2 jobs: Python 3.9, Python 3.11)
+    ├─ tests.yml (4 jobs: unit, integration, e2e, performance)
+    └─ deploy.yml (2 jobs: staging, production)
+
+    Redis Task Queue Flow:
+    =====================
+    Each job becomes an independent task in Redis with phases:
+    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+    │ NEW_EVENT   │───▶│ START_JOB   │───▶│ WAIT_JOB    │───▶│ RESULTS     │
+    │ (1 task)    │    │ (N tasks)   │    │ (Monitor)   │    │ (Finalize)  │
+    └─────────────┘    └─────────────┘    └──────┬──────┘    └─────────────┘
+                                                 │
+                                                 ▼
+                                          ┌─────────────┐
+                                          │ FAILURE     │
+                                          │ (Handle     │
+                                          │  timeouts)  │
+                                          └─────────────┘
+    """
     task_phase = TaskPhase(task["phase"])
     event_type = task["event_type"]
     payload = task["payload"]
@@ -314,6 +354,10 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
     gh_url_runs = f"/repos/{repo_owner}/{repo_name}/check-runs"
     post_kwargs = {"gh": gh, "gh_url": gh_url_runs, "head_sha": head_sha}
 
+    # =====================================================
+    # EVENT PROCESSING
+    # This stage handles incoming GitHub webhook events and extracts configuration files from repositories.
+    # =====================================================
     if task_phase == TaskPhase.NEW_EVENT:
         config_files, config_dir, config_error = await generate_run_configs(
             event_type=event_type,
@@ -355,6 +399,10 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
             logging.info(log_prefix + f"Enqueued {count} jobs for config '{cfg_file.name}'")
         return
 
+    # =====================================================
+    # JOB INITIALIZATION
+    # This stage creates and launches new Lightning AI jobs based on processed configurations.
+    # =====================================================
     if task_phase == TaskPhase.START_JOB:
         config_run = ConfigRun(**task["run_config"])
         debug_mode = config_run.mode == "debug"
@@ -405,6 +453,10 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
         logging.info(log_prefix + f"Enqueued litJob for config '{config_run.name}'")
         return
 
+    # =====================================================
+    # JOB MONITORING
+    # This stage continuously monitors running job status and handles timeout scenarios.
+    # =====================================================
     if task_phase == TaskPhase.WAIT_JOB:
         job_name = task["job_name"]
         lit_job = _restore_lit_job_from_task(job_ref=task["job_reference"])
@@ -433,6 +485,10 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
         logging.info(log_prefix + f"Enqueued results for job '{job_name}'")
         return
 
+    # =====================================================
+    # RESULTS PROCESSING
+    # This stage finalizes job execution by processing results and updating GitHub status checks.
+    # =====================================================
     if task_phase == TaskPhase.RESULTS:
         config_run = ConfigRun(**task["run_config"])
         debug_mode = config_run.mode == "debug"
@@ -464,6 +520,10 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
         logging.info(log_prefix + f"Job {job_name} finished as `{job_status}` with exit code `{exit_code}`.")
         return
 
+    # =====================================================
+    # FAILURE HANDLING
+    # This stage manages job failure scenarios and cleanup operations for incomplete executions.
+    # =====================================================
     if task_phase == TaskPhase.FAILURE:
         job_name = task["job_name"]
         lit_job = _restore_lit_job_from_task(job_ref=task["job_reference"])

@@ -86,6 +86,91 @@ The bot processes GitHub events through a queued, phased lifecycle to ensure rel
 
 This phased approach allows workers to handle tasks concurrently. If a worker restarts, pending tasks remain in the queue. Use multiple workers for load balancing.
 
+### Consolidated Job Processing Flow:
+
+```
+┌─────────────────┐
+│ GitHub Event    │ (e.g., push, pull_request, workflow_dispatch)
+│   (Webhook)     │
+└─────────┬───────┘
+          │
+          ▼
+┌─────────────────┐
+│ NEW_EVENT Phase │ - Download repo .lightning/workflows folder
+│ (Event Process) │ - Parse configuration files
+│                 │ - Check event triggers & generate job runs
+└─────────┬───────┘
+          │
+          ▼
+┌──────────────────────────────────────────────────────┐
+│              Multiple Job Runs Generated             │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐   │
+│  │ Job Run 1.1 │  │ Job Run 2.1 │  │ Job Run N.M │   │
+│  │ Job Run 1.2 │  │ Job Run 2.2 │  │     ...     │   │
+│  │     ...     │  │     ...     │  │             │   │
+│  └─────────────┘  └─────────────┘  └─────────────┘   │
+└─────────────────┬────────────────────────────────────┘
+                  │ (Each job follows same path)
+                  ▼
+        ┌─────────────────┐
+        │ START_JOB Phase │ - Create GitHub check run
+        │  (Launch Jobs)  │ - Launch Lightning AI job
+        └─────────┬───────┘
+                  │
+                  ▼
+        ┌──────────────────┐
+        │  WAIT_JOB Phase  │ ◀─── Re-queue if still running/pending
+        │ (Monitor Status) │
+        └─────────┬────────┘
+                  │ (Decision Point)
+                  ▼
+            ┌─────────────┐
+            │ Job Status  │
+            │ Evaluation  │
+            └──────┬──────┘
+                   │
+     ┌─────────────┼─────────────────┐
+     │             │                 │
+     ▼             ▼                 ▼
+┌─────────┐   ┌──────────┐    ┌──────────────┐
+│ TIMEOUT │   │ FINISHED │    │ STILL ACTIVE │
+└────┬────┘   └────┬─────┘    └──────┬───────┘
+     │             │                 │
+     ▼             ▼                 ▼
+┌─────────┐    ┌─────────┐        ┌──────┐
+│ FAILURE │    │ RESULTS │        │ WAIT │
+│  Phase  │    │  Phase  │        │(Loop)│
+└─────────┘    └─────────┘        └──────┘
+     │              │
+     ▼              ▼
+┌───────────┐   ┌───────────────┐
+│ GH Status:│   │    Process    │
+│ CANCELLED │   │ Logs & Report │
+└───────────┘   └────┬──────────┘
+                     │
+                     ▼
+             ┌───────────────┐
+             │ GitHub Status:│
+             │  - SUCCESS    │
+             │  - FAILURE    │
+             │  - NEUTRAL    │
+             └───────────────┘
+```
+
+### Legend:
+
+```
+┌─────────┐
+│ PHASE   │    Phases (Redis queue tasks)
+└─────────┘
+
+┌──────────┐
+│ Decision │    Decision points
+└──────────┘
+
+◀───           Re-queue loop
+```
+
 ## How to Start
 
 1. **Start Redis Server**:
