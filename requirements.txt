@@ -1,7 +1,5 @@
-gidgethub[aiohttp]
-lightning_sdk >=2025.07.17
+gidgethub[aiohttp] >=5.0
+lightning_sdk >=2025.8.7
 PyYAML
+redis >=5.0
 #py-tree
-
-redis
-rq
