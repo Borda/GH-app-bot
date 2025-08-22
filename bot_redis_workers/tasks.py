@@ -440,4 +440,4 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
         logging.debug(log_prefix + f"Job {job_name} still stopping, re-enqueued")
         return
 
-    raise RuntimeError(f"Unknown task type: {task_phase}")
+    raise RuntimeError(f"Unknown task phase: {task_phase}")
