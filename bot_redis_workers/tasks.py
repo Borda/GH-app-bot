@@ -53,6 +53,12 @@ def this_teamspace() -> Teamspace:
     return Teamspace()
 
 
+@lru_cache
+def _restore_lit_job_from_task(job_ref: dict) -> Job:
+    """Extract litJob from task."""
+    return Job(name=job_ref["name"], teamspace=job_ref["teamspace"], org=job_ref["org"])
+
+
 # Generate run configs
 async def generate_run_configs(
     event_type: str, delivery_id: str, payload: dict, auth_token: str
@@ -355,8 +361,7 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
 
     if task_phase == TaskPhase.WAIT_JOB:
         job_name = task["job_name"]
-        job_ref = task["job_reference"]
-        lit_job = Job(name=job_ref["name"], teamspace=job_ref["teamspace"], org=job_ref["org"])
+        lit_job = _restore_lit_job_from_task(task["job_reference"])
         if lit_job.status not in LIT_STATUS_RUNNING_OR_FINISHED:
             task = await process_job_pending(gh=gh, task=task, lit_job=lit_job)
             if TaskPhase(task["phase"]) == TaskPhase.FAILURE:
@@ -386,8 +391,7 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
         config_run = ConfigRun(**task["run_config"])
         debug_mode = config_run.mode == "debug"
         job_name = task["job_name"]
-        job_ref = task["job_reference"]
-        lit_job = Job(name=job_ref["name"], teamspace=job_ref["teamspace"], org=job_ref["org"])
+        lit_job = _restore_lit_job_from_task(task["job_reference"])
         url_check_id = f"/repos/{repo_owner}/{repo_name}/check-runs/{task['check_id']}"
 
         job_status, exit_code, results = finalize_job(
@@ -417,7 +421,7 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
     if task_phase == TaskPhase.FAILURE:
         job_name = task["job_name"]
         job_ref = task["job_reference"]
-        job_name, job_ref, lit_job = _extract_lit_job_from_task(task)
+        job_name, job_ref, lit_job = _restore_lit_job_from_task(task)
         if lit_job.status in LIT_STATUS_FINISHED:
             # todo: send notification to the user
             return
