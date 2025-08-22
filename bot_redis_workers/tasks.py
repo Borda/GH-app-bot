@@ -43,6 +43,7 @@ class TaskPhase(Enum):
     NEW_EVENT = "new_event"
     START_JOB = "start_job"
     WAIT_JOB = "wait_job"
+    FAILURE = "failure"
     RESULTS = "results"
 
 
@@ -176,7 +177,7 @@ async def process_task_with_session(task: dict, redis_client: redis.Redis) -> No
         await _process_task_inner(task, redis_client, session)
 
 
-async def process_job_pending(gh, task: dict, lit_job: Job) -> dict | None:
+async def process_job_pending(gh, task: dict, lit_job: Job) -> dict:
     config_run = ConfigRun(**task["run_config"])
     job_name = task["job_name"]
     url_check_id = f"/repos/{config_run.repository_owner}/{config_run.repository_name}/check-runs/{task['check_id']}"
@@ -193,7 +194,8 @@ async def process_job_pending(gh, task: dict, lit_job: Job) -> dict | None:
             summary="Wait for machine availability too long",
             text=f"Job `{job_name}` didn't start within the provided ({LIT_JOB_QUEUE_TIMEOUT}) timeout.",
         )
-        return None
+        task.update({"phase": TaskPhase.FAILURE.value})
+        return task
 
     await _post_gh_run_status_update_check(
         gh=gh,
@@ -207,7 +209,7 @@ async def process_job_pending(gh, task: dict, lit_job: Job) -> dict | None:
     return task
 
 
-async def process_job_running(gh, task, lit_job: Job) -> dict | None:
+async def process_job_running(gh, task, lit_job: Job) -> dict:
     config_run = ConfigRun(**task["run_config"])
     job_name = task["job_name"]
     url_check_id = f"/repos/{config_run.repository_owner}/{config_run.repository_name}/check-runs/{task['check_id']}"
@@ -224,7 +226,8 @@ async def process_job_running(gh, task, lit_job: Job) -> dict | None:
             summary="Job exceeded timeout limit.",
             text=f"Job `{job_name}` didn't finish within the provided ({config_run.timeout_minutes}) minutes.",
         )
-        return None
+        task.update({"phase": TaskPhase.FAILURE.value})
+        return task
 
     # case when it switched from pending to running, so last time it was not running
     if Status(task["job_status"]) not in LIT_STATUS_RUNNING_OR_FINISHED:
@@ -356,20 +359,20 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
         lit_job = Job(name=job_ref["name"], teamspace=job_ref["teamspace"], org=job_ref["org"])
         if lit_job.status not in LIT_STATUS_RUNNING_OR_FINISHED:
             task = await process_job_pending(gh=gh, task=task, lit_job=lit_job)
-            if task is None:
+            if TaskPhase(task["phase"]) is TaskPhase.FAILURE:
                 logging.warning(log_prefix + f"Job {job_name} didn't start within the provided timeout.")
-                return
+            else:
+                logging.debug(log_prefix + f"Job {job_name} still pending, re-enqueued")
             push_to_redis(redis_client, task)
-            logging.debug(log_prefix + f"Job {job_name} still pending, re-enqueued")
             return
 
         if lit_job.status in LIT_STATUS_RUNNING:
             task = await process_job_running(gh=gh, task=task, lit_job=lit_job)
-            if task is None:
+            if TaskPhase(task["phase"]) is TaskPhase.FAILURE:
                 logging.warning(log_prefix + f"Job {job_name} didn't finish within the provided timeout.")
-                return
+            else:
+                logging.debug(log_prefix + f"Job {job_name} status changed to {lit_job.status.value}, re-enqueued")
             push_to_redis(redis_client, task)
-            logging.debug(log_prefix + f"Job {job_name} status changed to {lit_job.status.value}, re-enqueued")
             return
 
         assert lit_job.status in LIT_STATUS_FINISHED, f"'{lit_job.status}' is not a finished as `{LIT_STATUS_FINISHED}`"
@@ -411,4 +414,8 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
         logging.info(log_prefix + f"Job {job_name} finished as `{job_status}` with exit code `{exit_code}`.")
         return
 
-    logging.error(f"Unknown task type: {task_phase}")
+    if task_phase == TaskPhase.FAILURE:
+        # todo: send notification to the user
+        return
+
+    raise RuntimeError(f"Unknown task phase: {task_phase}")
