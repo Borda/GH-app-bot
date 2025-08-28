@@ -171,7 +171,7 @@ def finalize_job(job: Job, logs_hash: str, exit_hash: str, debug: bool = False) 
         # cut the logs all before the cutoff string
         cutoff_index = logs.find(logs_hash)
         if cutoff_index == -1:
-            logging.warn(f"iter {it}: the cutoff string was not found in the logs")
+            logging.warning(f"iter {it}: the cutoff string was not found in the logs")
         logs = logs[cutoff_index + len(logs_hash) :]
 
     # todo: cleanup job if needed or success

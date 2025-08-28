@@ -287,7 +287,7 @@ class ConfigRun(ConfigBase):
     params: dict
     file_name: str
 
-    def __init__(self, config_body: dict, params: dict, file_name: str):
+    def __init__(self, config_body: dict, params: dict, file_name: str) -> None:
         """Initialize a ConfigRun.
 
         Args:

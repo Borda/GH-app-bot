@@ -52,7 +52,6 @@ async def process_async_event(
         router: Router responsible for dispatching the event to handlers.
         github_app_id: GitHub App ID.
         app_private_key: PEM-encoded private key used to sign the JWT.
-
     """
     jwt_token = create_jwt_token(github_app_id=github_app_id, app_private_key=app_private_key)
 
