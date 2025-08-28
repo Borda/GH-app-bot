@@ -137,7 +137,8 @@ class ConfigWorkflow(ConfigBase):
             True
             >>> ConfigWorkflow._is_triggered_by_event("push", "feature", {"push": {"branches": ["main"]}})
             False
-            >>> ConfigWorkflow._is_triggered_by_event("pull_request", "feature", {"pull_request": {"branches": ["main"]}})
+            >>> ConfigWorkflow._is_triggered_by_event(
+            ...     "pull_request", "feature", {"pull_request": {"branches": ["main"]}})
             False
             >>> ConfigWorkflow._is_triggered_by_event("push", "main")
             True
