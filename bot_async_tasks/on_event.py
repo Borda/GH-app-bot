@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from aiohttp import ClientSession, ClientTimeout
+from gidgethub import sansio
 from gidgethub.aiohttp import GitHubAPI
 from lightning_sdk import Status, Teamspace
 from lightning_sdk.lightning_cloud.env import LIGHTNING_CLOUD_URL
@@ -32,7 +33,11 @@ LOCAL_TEMP_DIR = LOCAL_ROOT_DIR / ".temp"
 
 @lru_cache
 def this_teamspace() -> Teamspace:
-    """Get the current Teamspace instance."""
+    """Return the current Teamspace instance (cached).
+
+    Returns:
+        The active Teamspace.
+    """
     return Teamspace()
 
 
@@ -73,8 +78,16 @@ def this_teamspace() -> Teamspace:
 #     )
 
 
-async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> None:
-    """Handle GitHub webhook events for code changes (push or pull_request)."""
+async def on_code_changed(event: sansio.Event, gh: GitHubAPI, token: str, *args: Any, **kwargs: Any) -> None:
+    """Handle code-change events (push or pull_request) and orchestrate check runs.
+
+    Args:
+        event: Parsed GitHub webhook event.
+        gh: Authenticated GitHub API client.
+        token: Installation access token for GitHub API.
+        *args: Unused positional arguments.
+        **kwargs: Unused keyword arguments.
+    """
     # figure out the commit SHA and branch ref
     repo_owner, repo_name, head_sha, branch_ref = extract_repo_details(event.event, event.data)
     link_lightning_jobs = f"{LIGHTNING_CLOUD_URL}/{this_teamspace().owner.name}/{this_teamspace().name}/jobs/"
@@ -200,8 +213,21 @@ async def on_code_changed(event, gh, token: str, *args: Any, **kwargs: Any) -> N
     logging.info(log_prefix + f"All tasks completed: {results}")
 
 
-async def patch_check_run(token: str, url: str, data: dict, retries: int = 3, backoff: float = 1.0) -> Any:
-    """Patch a check run with retries in case of connection issues."""
+async def patch_check_run(
+    token: str, url: str, data: dict[str, Any], retries: int = 3, backoff: float = 1.0
+) -> Any:
+    """Patch a check run with basic retry/backoff handling.
+
+    Args:
+        token: Installation access token for GitHub API.
+        url: Check-run resource URL path.
+        data: Patch payload.
+        retries: Number of retry attempts for transient errors.
+        backoff: Base backoff time in seconds.
+
+    Returns:
+        The GitHub API response.
+    """
     timeout = ClientTimeout(total=retries)
     async with ClientSession(timeout=timeout) as session:
         gh_api = GitHubAPI(session, "bot_async_tasks", oauth_token=token)
@@ -214,7 +240,17 @@ async def complete_run(
     config_run: ConfigRun,
     token: str,
 ) -> GitHubRunConclusion:
-    """Run a job and update the check run status."""
+    """Run a Lightning job and update the associated GitHub check run.
+
+    Args:
+        fn_patch_check_run: Function used to patch the check run status.
+        job_name: The descriptive job name.
+        config_run: Parsed configuration for this run.
+        token: Installation access token used by underlying operations.
+
+    Returns:
+        The final GitHub check-run conclusion for this job.
+    """
     debug_mode = config_run.mode == "debug"
     # define initial values
     summary = ""  # Summary of the job's execution

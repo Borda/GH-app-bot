@@ -10,7 +10,13 @@ from bot_redis_workers import REDIS_QUEUE, REDIS_URL
 from bot_redis_workers.tasks import TaskPhase
 
 
-async def handle_code_event(event, redis_client):
+async def handle_code_event(event: sansio.Event, redis_client: redis.Redis) -> None:
+    """Enqueue a new task for push or pull_request events.
+
+    Args:
+        event: Parsed GitHub webhook event.
+        redis_client: Redis client used for pushing tasks.
+    """
     payload = event.data
     task = {
         "delivery_id": event.delivery_id,
@@ -32,7 +38,15 @@ async def handle_code_event(event, redis_client):
         logging.info(f"Enqueued new_event for `push` \t{repo_owner}/{repo_name}@{head_sha[:7]}")
 
 
-async def main(request):
+async def main(request: web.Request) -> web.Response:
+    """aiohttp handler that parses GitHub webhook and dispatches to router.
+
+    Args:
+        request: Incoming aiohttp request.
+
+    Returns:
+        HTTP 200 for ACK or errors if parsing fails.
+    """
     # Load and validate all environment vars exactly once
     _, _, webhook_secret = _load_validate_required_env_vars()
     body = await request.read()
@@ -50,7 +64,12 @@ async def main(request):
     return web.Response(status=200)
 
 
-async def init_app():
+async def init_app() -> web.Application:
+    """Initialize aiohttp application with Redis and GitHub router.
+
+    Returns:
+        The configured aiohttp web application.
+    """
     # Localize Redis client creation here
     try:
         redis_client = redis.from_url(REDIS_URL)

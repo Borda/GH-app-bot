@@ -221,13 +221,27 @@ async def _post_gh_run_status_update_check(
 
 
 async def process_task_with_session(task: dict[str, Any], redis_client: redis.Redis) -> None:
-    """Wrapper that manages the aiohttp session for the entire task processing."""
+    """Wrapper that manages an aiohttp session for end-to-end task processing.
+
+    Args:
+        task: A serialized task dictionary pulled from Redis.
+        redis_client: Redis client used to re-enqueue or push follow-up tasks.
+    """
     async with ClientSession() as session:
         await _process_task_inner(task, redis_client, session)
 
 
 async def process_job_pending(gh: GitHubAPI, task: dict[str, Any], lit_job: Job) -> dict[str, Any]:
-    """Check the status of a yet pending job and validate waiting time."""
+    """Check the status of a pending job and validate waiting time.
+
+    Args:
+        gh: Authenticated GitHub API client.
+        task: Task dict carrying job context.
+        lit_job: Lightning Job instance reconstructed from the task.
+
+    Returns:
+        The possibly-updated task dict (phase may switch to FAILURE).
+    """
     config_run = ConfigRun(**task["run_config"])
     job_name = task["job_name"]
     url_check_id = f"/repos/{config_run.repository_owner}/{config_run.repository_name}/check-runs/{task['check_id']}"
@@ -260,7 +274,16 @@ async def process_job_pending(gh: GitHubAPI, task: dict[str, Any], lit_job: Job)
 
 
 async def process_job_running(gh: GitHubAPI, task: dict[str, Any], lit_job: Job) -> dict[str, Any]:
-    """Check the status of a running job and validate running time."""
+    """Check the status of a running job and validate running time.
+
+    Args:
+        gh: Authenticated GitHub API client.
+        task: Task dict carrying job context.
+        lit_job: Lightning Job instance reconstructed from the task.
+
+    Returns:
+        The possibly-updated task dict (phase may switch to FAILURE).
+    """
     config_run = ConfigRun(**task["run_config"])
     job_name = task["job_name"]
     url_check_id = f"/repos/{config_run.repository_owner}/{config_run.repository_name}/check-runs/{task['check_id']}"
@@ -297,7 +320,15 @@ async def process_job_running(gh: GitHubAPI, task: dict[str, Any], lit_job: Job)
 
 
 async def _get_gh_app_token(session: ClientSession, payload: dict[str, Any]) -> str:
-    """Get GitHub App token for the installation."""
+    """Get an installation access token for the GitHub App.
+
+    Args:
+        session: aiohttp client session to use for GitHub API calls.
+        payload: Parsed webhook payload containing installation info.
+
+    Returns:
+        Installation access token string.
+    """
     github_app_id, app_private_key, webhook_secret = _load_validate_required_env_vars()
     jwt_token = create_jwt_token(github_app_id=github_app_id, app_private_key=app_private_key)
     # Exchange JWT for installation token

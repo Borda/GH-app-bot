@@ -2,7 +2,7 @@ import asyncio
 import logging
 
 from aiohttp import ClientSession, web
-from gidgethub import sansio
+from gidgethub import routing, sansio
 from gidgethub.aiohttp import GitHubAPI
 from gidgethub.apps import get_installation_access_token
 
@@ -42,8 +42,18 @@ from _bots_commons.utils import _load_validate_required_env_vars, create_jwt_tok
 #         await router.dispatch(event, gh, inst_token)
 
 
-async def process_async_event(event, router, github_app_id: int, app_private_key: str):
-    """Authenticate, exchange tokens, and dispatch the event to the router."""
+async def process_async_event(
+    event: sansio.Event, router: routing.Router, github_app_id: int, app_private_key: str
+) -> None:
+    """Authenticate with GitHub App, swap for installation token, and dispatch.
+
+    Args:
+        event: Parsed GitHub webhook event.
+        router: Router responsible for dispatching the event to handlers.
+        github_app_id: GitHub App ID.
+        app_private_key: PEM-encoded private key used to sign the JWT.
+
+    """
     jwt_token = create_jwt_token(github_app_id=github_app_id, app_private_key=app_private_key)
 
     async with ClientSession() as session:
@@ -60,8 +70,15 @@ async def process_async_event(event, router, github_app_id: int, app_private_key
         await router.dispatch(event, gh, inst_token)
 
 
-async def handle_request(request):
-    """Minimal HTTP handler: read the webhook, schedule processing, and ack."""
+async def handle_request(request: web.Request) -> web.Response:
+    """Read webhook, schedule async processing, and acknowledge immediately.
+
+    Args:
+        request: Incoming aiohttp request containing the GitHub webhook.
+
+    Returns:
+        An HTTP response acknowledging receipt (200) or an error (400).
+    """
     github_app_id, app_private_key, webhook_secret = _load_validate_required_env_vars()
 
     try:
