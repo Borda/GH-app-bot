@@ -233,7 +233,7 @@ async def process_job_pending(gh, task: dict, lit_job: Job) -> dict:
             started_at=task["job_start_time"],
             url_job=lit_job.link + "&job_detail_tab=logs",
             summary="Wait for machine availability too long",
-            text=f"Job `{job_name}` didn't start within the provided ({LIT_JOB_QUEUE_TIMEOUT}) timeout.",
+            text=f"Job **{job_name}** didn't start within the provided ({LIT_JOB_QUEUE_TIMEOUT}) timeout.",
         )
         task.update({"phase": TaskPhase.FAILURE.value})
         return task
@@ -245,7 +245,7 @@ async def process_job_pending(gh, task: dict, lit_job: Job) -> dict:
         run_status=GitHubRunStatus.QUEUED,
         started_at=task["job_start_time"],
         url_job=lit_job.link + "&job_detail_tab=logs",
-        summary=f"Job `{job_name}` is waiting for machine availability",
+        summary=f"Job **{job_name}** is waiting for machine availability",
     )
     return task
 
@@ -266,7 +266,7 @@ async def process_job_running(gh, task, lit_job: Job) -> dict:
             started_at=task["job_start_time"],
             url_job=lit_job.link + "&job_detail_tab=logs",
             summary="Job exceeded timeout limit.",
-            text=f"Job `{job_name}` didn't finish within the provided ({config_run.timeout_minutes}) minutes.",
+            text=f"Job **{job_name}** didn't finish within the provided ({config_run.timeout_minutes}) minutes.",
         )
         task.update({"phase": TaskPhase.FAILURE.value})
         return task
@@ -282,7 +282,7 @@ async def process_job_running(gh, task, lit_job: Job) -> dict:
         run_status=GitHubRunStatus.IN_PROGRESS,
         started_at=task["job_start_time"],
         url_job=lit_job.link + "&job_detail_tab=logs",
-        summary=f"Job `{job_name}` is running on Lightning Cloud",
+        summary=f"Job **{job_name}** is running on Lightning Cloud",
     )
     return task
 
@@ -424,7 +424,7 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
                 cfg_file_name=config_run.file_name, config=config_run, gh_token=inst_token, job_name=job_name
             )
         except Exception as ex:
-            logging.error(f"Failed to run job `{job_name}`: {ex!s}\n{traceback.format_exc()}")
+            logging.error(f"Failed to run job '{job_name}': {ex!s}\n{traceback.format_exc()}")
             text = f"```console\n{ex!s}\n```" if debug_mode else "No specific error details available."
             await _post_gh_run_status_update_check(
                 gh=gh,
@@ -433,7 +433,7 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
                 run_status=GitHubRunStatus.COMPLETED,
                 run_conclusion=GitHubRunConclusion.FAILURE,
                 url_job=link_lightning_jobs,
-                summary=f"Job `{job_name}` failed.",
+                summary=f"Job **{job_name}** failed.",
                 text=text,
             )
             return
@@ -463,18 +463,18 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
         if lit_job.status not in LIT_STATUS_RUNNING_OR_FINISHED:
             task = await process_job_pending(gh=gh, task=task, lit_job=lit_job)
             if TaskPhase(task["phase"]) == TaskPhase.FAILURE:
-                logging.warning(log_prefix + f"Job {job_name} didn't start within the provided timeout.")
+                logging.warning(log_prefix + f"Job '{job_name}' didn't start within the provided timeout.")
             else:
-                logging.debug(log_prefix + f"Job {job_name} still pending, re-enqueued")
+                logging.debug(log_prefix + f"Job '{job_name}' still pending, re-enqueued")
             push_to_redis(redis_client, task)
             return
 
         if lit_job.status in LIT_STATUS_RUNNING:
             task = await process_job_running(gh=gh, task=task, lit_job=lit_job)
             if TaskPhase(task["phase"]) == TaskPhase.FAILURE:
-                logging.warning(log_prefix + f"Job {job_name} didn't finish within the provided timeout.")
+                logging.warning(log_prefix + f"Job '{job_name}' didn't finish within the provided timeout.")
             else:
-                logging.debug(log_prefix + f"Job {job_name} still running, re-enqueued")
+                logging.debug(log_prefix + f"Job '**{job_name}**' still running, re-enqueued")
             push_to_redis(redis_client, task)
             return
 
@@ -514,10 +514,10 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
             run_conclusion=run_conclusion,
             started_at=task["job_start_time"],
             url_job=lit_job.link + "&job_detail_tab=logs",
-            summary=f"Job '{job_name}' finished as `{job_status}` with exit code `{exit_code}`.",
+            summary=f"Job **{job_name}** finished as `{job_status}` with exit code `{exit_code}`.",
             text=f"```console\n{results or 'No results available'}\n```",
         )
-        logging.info(log_prefix + f"Job {job_name} finished as `{job_status}` with exit code `{exit_code}`.")
+        logging.info(log_prefix + f"Job '{job_name}' finished as `{job_status}` with exit code `{exit_code}`.")
         return
 
     # =====================================================
@@ -531,7 +531,7 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
             # todo: some extra staff if required
             return
         push_to_redis(redis_client, task)
-        logging.debug(log_prefix + f"Job {job_name} still stopping, re-enqueued")
+        logging.debug(log_prefix + f"Job '{job_name}' still stopping, re-enqueued")
         return
 
     raise RuntimeError(f"Unknown task phase: {task_phase}")
