@@ -6,6 +6,7 @@ from datetime import datetime
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 import redis
 from aiohttp import ClientSession
@@ -54,7 +55,7 @@ def this_teamspace() -> Teamspace:
 
 
 # @lru_cache # NOTE: this can't be cached as it won't properly update job's status
-def _restore_lit_job_from_task(job_ref: dict) -> Job:
+def _restore_lit_job_from_task(job_ref: dict[str, str]) -> Job:
     """Extract litJob from task.
 
     Args:
@@ -68,7 +69,7 @@ def _restore_lit_job_from_task(job_ref: dict) -> Job:
 
 # Generate run configs
 async def generate_run_configs(
-    event_type: str, delivery_id: str, payload: dict, auth_token: str, log_prefix: str
+    event_type: str, delivery_id: str, payload: dict[str, Any], auth_token: str, log_prefix: str
 ) -> tuple[list[ConfigFile], Path | None, Exception | None]:
     """Generate run configs for the given event.
 
@@ -113,7 +114,7 @@ async def generate_run_configs(
     return config_files, config_dir, config_error
 
 
-def push_to_redis(redis_client: redis.Redis, task: dict):
+def push_to_redis(redis_client: redis.Redis, task: dict[str, Any]) -> None:
     """Push task to Redis queue.
 
     Args:
@@ -125,7 +126,7 @@ def push_to_redis(redis_client: redis.Redis, task: dict):
     redis_client.rpush(REDIS_QUEUE, json.dumps(task))
 
 
-async def _post_gh_run_status_missing_configs(gh, gh_url, head_sha: str, text: str) -> None:
+async def _post_gh_run_status_missing_configs(gh: GitHubAPI, gh_url: str, head_sha: str, text: str) -> None:
     """Post a GitHub run status with missing configs."""
     await gh_post_with_retry(
         gh=gh,
@@ -146,7 +147,13 @@ async def _post_gh_run_status_missing_configs(gh, gh_url, head_sha: str, text: s
 
 
 async def _post_gh_run_status_not_triggered(
-    gh, gh_url, head_sha: str, event_type: str, branch_ref: str, cfg_file: ConfigFile, config: ConfigWorkflow
+    gh: GitHubAPI,
+    gh_url: str,
+    head_sha: str,
+    event_type: str,
+    branch_ref: str,
+    cfg_file: ConfigFile,
+    config: ConfigWorkflow,
 ) -> None:
     """Post a GitHub run status with missing configs."""
     await gh_post_with_retry(
@@ -167,7 +174,9 @@ async def _post_gh_run_status_not_triggered(
     )
 
 
-async def _post_gh_run_status_create_check(gh, gh_url, head_sha: str, run_name: str, link_lit_jobs: str) -> str:
+async def _post_gh_run_status_create_check(
+    gh: GitHubAPI, gh_url: str, head_sha: str, run_name: str, link_lit_jobs: str
+) -> str:
     """Create a GitHub run status."""
     check = await gh_post_with_retry(
         gh=gh,
@@ -183,7 +192,7 @@ async def _post_gh_run_status_create_check(gh, gh_url, head_sha: str, run_name: 
 
 
 async def _post_gh_run_status_update_check(
-    gh,
+    gh: GitHubAPI,
     gh_url: str,
     title: str,
     run_status: GitHubRunStatus,
@@ -211,13 +220,13 @@ async def _post_gh_run_status_update_check(
     await gh_patch_with_retry(gh=gh, url=gh_url, data=patch_data)
 
 
-async def process_task_with_session(task: dict, redis_client: redis.Redis) -> None:
+async def process_task_with_session(task: dict[str, Any], redis_client: redis.Redis) -> None:
     """Wrapper that manages the aiohttp session for the entire task processing."""
     async with ClientSession() as session:
         await _process_task_inner(task, redis_client, session)
 
 
-async def process_job_pending(gh, task: dict, lit_job: Job) -> dict:
+async def process_job_pending(gh: GitHubAPI, task: dict[str, Any], lit_job: Job) -> dict[str, Any]:
     """Check the status of a yet pending job and validate waiting time."""
     config_run = ConfigRun(**task["run_config"])
     job_name = task["job_name"]
@@ -250,7 +259,7 @@ async def process_job_pending(gh, task: dict, lit_job: Job) -> dict:
     return task
 
 
-async def process_job_running(gh, task, lit_job: Job) -> dict:
+async def process_job_running(gh: GitHubAPI, task: dict[str, Any], lit_job: Job) -> dict[str, Any]:
     """Check the status of a running job and validate running time."""
     config_run = ConfigRun(**task["run_config"])
     job_name = task["job_name"]
@@ -287,7 +296,7 @@ async def process_job_running(gh, task, lit_job: Job) -> dict:
     return task
 
 
-async def _get_gh_app_token(session, payload: dict) -> str:
+async def _get_gh_app_token(session: ClientSession, payload: dict[str, Any]) -> str:
     """Get GitHub App token for the installation."""
     github_app_id, app_private_key, webhook_secret = _load_validate_required_env_vars()
     jwt_token = create_jwt_token(github_app_id=github_app_id, app_private_key=app_private_key)
@@ -300,7 +309,7 @@ async def _get_gh_app_token(session, payload: dict) -> str:
     return token_resp["token"]
 
 
-async def _process_task_inner(task: dict, redis_client: redis.Redis, session) -> None:
+async def _process_task_inner(task: dict[str, Any], redis_client: redis.Redis, session: ClientSession) -> None:
     """This is the main function that processes a task with phases.
 
     Key Multipliers:
@@ -518,6 +527,7 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
             text=f"```console\n{results or 'No results available'}\n```",
         )
         logging.info(log_prefix + f"Job '{job_name}' finished as `{job_status}` with exit code `{exit_code}`.")
+        lit_job.delete()
         return
 
     # =====================================================
@@ -529,6 +539,7 @@ async def _process_task_inner(task: dict, redis_client: redis.Redis, session) ->
         lit_job = _restore_lit_job_from_task(job_ref=task["job_reference"])
         if lit_job.status in LIT_STATUS_FINISHED:
             # todo: some extra staff if required
+            # lit_job.delete()
             return
         push_to_redis(redis_client, task)
         logging.debug(log_prefix + f"Job '{job_name}' still stopping, re-enqueued")
