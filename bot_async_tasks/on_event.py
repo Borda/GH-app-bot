@@ -213,9 +213,7 @@ async def on_code_changed(event: sansio.Event, gh: GitHubAPI, token: str, *args:
     logging.info(log_prefix + f"All tasks completed: {results}")
 
 
-async def patch_check_run(
-    token: str, url: str, data: dict[str, Any], retries: int = 3, backoff: float = 1.0
-) -> Any:
+async def patch_check_run(token: str, url: str, data: dict[str, Any], retries: int = 3, backoff: float = 1.0) -> Any:
     """Patch a check run with basic retry/backoff handling.
 
     Args:
