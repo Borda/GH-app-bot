@@ -14,7 +14,23 @@ _RELATIVE_PATH_DOWNLOAD = os.path.join(*_PATH_DOWNLOAD_PARTS[-3:])
 async def download_repo_archive(
     repo_owner: str, repo_name: str, git_ref: str, token: str, folder_path: str | Path, suffix: str = ""
 ) -> Path:
-    """Download a GitHub repository archive at a specific ref (branch, tag, commit) and return the path."""
+    """Download a GitHub repository archive and save it locally.
+
+    Args:
+        repo_owner: Repository owner (org or user).
+        repo_name: Repository name.
+        git_ref: Ref to download (branch, tag, or commit SHA).
+        token: GitHub token used for authentication.
+        folder_path: Local folder to save the archive.
+        suffix: Optional suffix appended to the archive name.
+
+    Returns:
+        Path to the saved .zip archive.
+
+    Raises:
+        aiohttp.ClientResponseError: If the GitHub API returns a non-2xx response.
+        OSError: If saving the archive fails.
+    """
     # Fetch zipball archive
     url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/zipball/{git_ref}"
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
@@ -47,7 +63,25 @@ async def download_repo_and_extract(
     subfolder: str = "",
     suffix: str = "",
 ) -> Path | None:
-    """Download a GitHub repository at a specific ref (branch, tag, commit) and extract it to a temp directory."""
+    """Download a GitHub repository at a ref and extract it locally.
+
+    Args:
+        repo_owner: Repository owner (org or user).
+        repo_name: Repository name.
+        git_ref: Ref to download (branch, tag, or commit SHA).
+        auth_token: GitHub token used for authentication.
+        folder_path: Local folder where the archive will be extracted.
+        subfolder: Optional subfolder to extract selectively (e.g., ".lightning").
+        suffix: Optional suffix appended to the extracted top-level directory.
+
+    Returns:
+        The path to the extracted repository directory, or None if it could not be determined.
+
+    Raises:
+        aiohttp.ClientResponseError: If the GitHub API returns a non-2xx response.
+        FileExistsError: If the target rename path already exists when using suffix.
+        OSError: If extraction fails.
+    """
     # 1) Fetch zipball archive
     url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/zipball/{git_ref}"
     headers = {"Authorization": f"Bearer {auth_token}", "Accept": "application/vnd.github+json"}
@@ -89,7 +123,16 @@ async def download_repo_and_extract(
 
 
 async def cli_download_repo_and_extract() -> None:
-    """CLI entry point to download and extract a GitHub repository."""
+    """CLI entry point to download and extract a GitHub repository.
+
+    Reads required environment variables, downloads the repo, and moves the
+    extracted content to the destination path.
+
+    Raises:
+        AssertionError: If required environment variables are missing.
+        FileExistsError: If a destination path already exists.
+        FileNotFoundError: If download or extraction fails.
+    """
     import shutil
     import tempfile
 

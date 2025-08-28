@@ -13,12 +13,20 @@ import jwt
 from aiohttp import client_exceptions
 
 
-def generate_unique_hash(length=16, params: dict | None = None) -> str:
+def generate_unique_hash(length: int = 16, params: dict | None = None) -> str:
     """Generate a unique hash string of a specified length.
 
-    >>> hash_16 = generate_unique_hash(params={"test": "value"})
-    >>> len(hash_16)
-    16
+    Args:
+        length: Number of hex characters to return.
+        params: Optional parameters included to diversify the hash.
+
+    Returns:
+        A hexadecimal string of the given length.
+
+    Examples:
+        >>> hash_16 = generate_unique_hash(params={"test": "value"})
+        >>> len(hash_16)
+        16
     """
     # Use the current timestamp and a counter for uniqueness
     unique_string = f"{time.time()}{os.getpid()}{params.values() if params else ''}"
@@ -26,32 +34,42 @@ def generate_unique_hash(length=16, params: dict | None = None) -> str:
     return hash_object.hexdigest()[:length]
 
 
-def to_bool(value) -> bool:
-    """Convert various boolean indicators to a Python bool.
+def to_bool(value: Any) -> bool:
+    """Convert common boolean-like values to a Python bool.
 
     Supports:
     - bool: returned as is
     - int: 1 (True) or 0 (False)
     - str: case-insensitive 'true', 'false', '1', '0', 'yes', 'no', 'on', 'off'
 
-    >>> to_bool(True)
-    True
-    >>> to_bool('true')
-    True
-    >>> to_bool('FALSE')
-    False
-    >>> to_bool(1)
-    True
-    >>> to_bool(0)
-    False
-    >>> to_bool('yes')
-    True
-    >>> to_bool('No')
-    False
-    >>> to_bool('invalid')
-    Traceback (most recent call last):
-      ...
-    ValueError: Unrecognized boolean value: 'invalid'
+    Args:
+        value: The value to convert.
+
+    Returns:
+        The converted boolean.
+
+    Raises:
+        ValueError: If the value cannot be interpreted as boolean.
+
+    Examples:
+        >>> to_bool(True)
+        True
+        >>> to_bool('true')
+        True
+        >>> to_bool('FALSE')
+        False
+        >>> to_bool(1)
+        True
+        >>> to_bool(0)
+        False
+        >>> to_bool('yes')
+        True
+        >>> to_bool('No')
+        False
+        >>> to_bool('invalid')
+        Traceback (most recent call last):
+          ...
+        ValueError: Unrecognized boolean value: 'invalid'
     """
     if value is None:
         return False
@@ -78,7 +96,20 @@ def to_bool(value) -> bool:
 
 
 def extract_zip_archive(zip_path: Path, extract_to: Path, subfolder: str = "") -> Path:
-    """Extract a zip archive to a specified directory, optionally filtering by subfolder."""
+    """Extract a zip archive to a specified directory, optionally filtering by subfolder.
+
+    Args:
+        zip_path: Path to the .zip archive.
+        extract_to: Destination directory.
+        subfolder: Optional subfolder prefix to filter extracted files.
+
+    Returns:
+        Path to the extracted root folder.
+
+    Raises:
+        FileNotFoundError: If the archive does not exist.
+        OSError: If extraction fails.
+    """
     if not zip_path.is_file():
         raise FileNotFoundError(f"Zip file {zip_path} does not exist.")
 
@@ -100,18 +131,27 @@ def extract_zip_archive(zip_path: Path, extract_to: Path, subfolder: str = "") -
 
 
 def wrap_long_text(text: str, line_width: int = 200, text_length: int = 65525) -> str:
-    """Wrap long lines in the text to a specified width, using '>' as the continuation symbol.
+    """Wrap lines and optionally truncate output to a maximum length.
 
-    >>> my_text = '''Well, well, well, what do we have here?
-    ... This is a very long line that should be wrapped to fit within N characters.
-    ... It should also handle multiple lines correctly.
-    ... This is another line will be truncated as it exceeds the specified text length limit.
-    ... '''
-    >>> print(wrap_long_text(my_text, line_width=56, text_length=150))
-    Well, well, well, what do we have here?
-    This is a very long line that should be wrapped to fit
-    ↪ within N characters.
-    …(truncated)
+    Args:
+        text: Input text to wrap.
+        line_width: Maximum line width before wrapping.
+        text_length: Maximum total length of the returned text.
+
+    Returns:
+        The wrapped (and possibly truncated) text.
+
+    Examples:
+        >>> my_text = '''Well, well, well, what do we have here?
+        ... This is a very long line that should be wrapped to fit within N characters.
+        ... It should also handle multiple lines correctly.
+        ... This is another line will be truncated as it exceeds the specified text length limit.
+        ... '''
+        >>> print(wrap_long_text(my_text, line_width=56, text_length=150))
+        Well, well, well, what do we have here?
+        This is a very long line that should be wrapped to fit
+        ↪ within N characters.
+        …(truncated)
     """
     wrapper = TextWrapper(
         width=line_width,
@@ -132,8 +172,18 @@ def sanitize_params_for_env(params: dict) -> dict:
 
     Replaces any character that is not a letter, number, or underscore with an underscore.
 
-    >>> sanitize_params_for_env({"key 1": "value1", "key-2": "value2"})
-    {'key_1': 'value1', 'key_2': 'value2'}
+    Args:
+        params: Input dictionary with arbitrary keys and values.
+
+    Returns:
+        A dictionary with keys converted to env-safe names.
+
+    Raises:
+        ValueError: If a key is not a string.
+
+    Examples:
+        >>> sanitize_params_for_env({"key 1": "value1", "key-2": "value2"})
+        {'key_1': 'value1', 'key_2': 'value2'}
     """
     sanitized_params = {}
     for key, value in params.items():
@@ -145,7 +195,15 @@ def sanitize_params_for_env(params: dict) -> dict:
 
 
 def _load_validate_required_env_vars() -> tuple[int, str, str]:
-    """Ensure required environment variables are set."""
+    """Ensure required environment variables are set.
+
+    Returns:
+        A tuple of (github_app_id, private_key, webhook_secret).
+
+    Raises:
+        AssertionError: If a required environment variable is missing.
+        AssertionError: If PRIVATE_KEY_PATH is provided but the file is missing.
+    """
     github_app_id = os.getenv("GITHUB_APP_ID")
     assert github_app_id, "`GITHUB_APP_ID` must be set in environment variables"
     private_key = os.getenv("PRIVATE_KEY")
@@ -161,7 +219,15 @@ def _load_validate_required_env_vars() -> tuple[int, str, str]:
 
 
 def create_jwt_token(github_app_id: int, app_private_key: str) -> str:
-    """Create a JWT token for authenticating with the GitHub API."""
+    """Create a JWT token for authenticating with the GitHub API.
+
+    Args:
+        github_app_id: GitHub App ID.
+        app_private_key: PEM-encoded private key.
+
+    Returns:
+        Encoded JWT string.
+    """
     return jwt.encode(
         {"iat": int(time.time()) - 60, "exp": int(time.time()) + (10 * 60), "iss": github_app_id},
         app_private_key,
@@ -170,7 +236,18 @@ def create_jwt_token(github_app_id: int, app_private_key: str) -> str:
 
 
 def extract_repo_details(event_type: str, payload: dict) -> tuple[str, str, str, str]:
-    """Extract the repository owner, name, head SHA, and branch ref from the event payload."""
+    """Extract repository owner, name, head SHA, and branch ref from the payload.
+
+    Args:
+        event_type: GitHub webhook event type ("push", "pull_request", ...).
+        payload: Raw event payload dictionary.
+
+    Returns:
+        A tuple of (repo_owner, repo_name, head_sha, branch_ref).
+
+    Raises:
+        ValueError: If the event type is unsupported.
+    """
     if event_type == "push":
         head_sha = payload["after"]
         branch_ref = payload["ref"][len("refs/heads/") :]
@@ -184,8 +261,22 @@ def extract_repo_details(event_type: str, payload: dict) -> tuple[str, str, str,
     return repo_owner, repo_name, head_sha, branch_ref
 
 
-async def gh_post_with_retry(gh, url: str, data: dict, retries: int = 3, backoff: float = 1.0) -> Any:
-    """Post data to GitHub API with retries in case of connection issues."""
+async def gh_post_with_retry(gh: Any, url: str, data: dict, retries: int = 3, backoff: float = 1.0) -> Any:
+    """POST to GitHub API with simple retry on ServerDisconnectedError.
+
+    Args:
+        gh: GitHub API client (e.g., gidgethub.aiohttp.GitHubAPI).
+        url: API endpoint path.
+        data: JSON-serializable payload.
+        retries: Number of retries.
+        backoff: Base backoff seconds (linear backoff: backoff * attempt).
+
+    Returns:
+        The response from gh.post or None if all retries fail.
+
+    Raises:
+        client_exceptions.ServerDisconnectedError: Propagates on final attempt.
+    """
     for it in range(1, retries + 1):
         try:
             return await gh.post(url, data=data)
@@ -196,8 +287,22 @@ async def gh_post_with_retry(gh, url: str, data: dict, retries: int = 3, backoff
     return None
 
 
-async def gh_patch_with_retry(gh, url: str, data: dict, retries: int = 3, backoff: float = 1.0) -> Any:
-    """Post data to GitHub API with retries in case of connection issues."""
+async def gh_patch_with_retry(gh: Any, url: str, data: dict, retries: int = 3, backoff: float = 1.0) -> Any:
+    """PATCH to GitHub API with simple retry on ServerDisconnectedError.
+
+    Args:
+        gh: GitHub API client (e.g., gidgethub.aiohttp.GitHubAPI).
+        url: API endpoint path.
+        data: JSON-serializable payload.
+        retries: Number of retries.
+        backoff: Base backoff seconds (linear backoff: backoff * attempt).
+
+    Returns:
+        The response from gh.patch or None if all retries fail.
+
+    Raises:
+        client_exceptions.ServerDisconnectedError: Propagates on final attempt.
+    """
     for it in range(1, retries + 1):
         try:
             return await gh.patch(url, data=data)
@@ -209,16 +314,29 @@ async def gh_patch_with_retry(gh, url: str, data: dict, retries: int = 3, backof
 
 
 def exceeded_timeout(start_time: str | datetime | float, timeout_seconds: float = 10) -> bool:
-    """check if the elapsed time since start_time is greater than timeout.
+    """Return True if elapsed time since start_time exceeds timeout_seconds.
 
-    Accepts ISO format string with optional trailing Z, datetime or timestamp.
-    >>> time_now = datetime.utcnow().isoformat() + "Z"
-    >>> exceeded_timeout(time_now)
-    False
-    >>> import time
-    >>> time.sleep(1)
-    >>> exceeded_timeout(time_now, timeout_seconds=1)
-    True
+    Accepts start_time as ISO string (with optional trailing 'Z'), datetime, or timestamp.
+
+    Args:
+        start_time: Start time reference (str, datetime, or timestamp).
+        timeout_seconds: How many seconds may elapse before it is considered timed out.
+
+    Returns:
+        True if elapsed time is greater than timeout_seconds, otherwise False.
+
+    Raises:
+        ValueError: If string time cannot be parsed.
+        TypeError: If start_time is of unsupported type.
+
+    Examples:
+        >>> time_now = datetime.utcnow().isoformat() + "Z"
+        >>> exceeded_timeout(time_now)
+        False
+        >>> import time
+        >>> time.sleep(1)
+        >>> exceeded_timeout(time_now, timeout_seconds=1)
+        True
     """
     if isinstance(start_time, str):
         ts_str = start_time.rstrip("Z")

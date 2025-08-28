@@ -6,6 +6,7 @@ from collections.abc import Generator
 from copy import deepcopy
 from enum import Enum
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -33,8 +34,12 @@ class GitHubRunConclusion(Enum):
 
 
 class ConfigBase(ABC):
-    def to_dict(self) -> dict:
-        """Convert to a JSON-serializable dictionary using only attributes."""
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to a JSON-serializable dictionary using only attributes.
+
+        Returns:
+            A dictionary containing only instance attributes with JSON-serializable values.
+        """
         result = {}
 
         # Get only instance attributes, not properties or methods
@@ -50,40 +55,62 @@ class ConfigBase(ABC):
 class ConfigWorkflow(ConfigBase):
     """Configuration for a run, including matrix generation.
 
-    >>> dir_examples = Path(__file__).resolve().parent.parent / "examples"
-    >>> dir_examples.exists()
-    True
-    >>> for cfg_file in ConfigFile.load_from_folder(dir_examples):
-    ...     cfg = ConfigWorkflow(cfg_file.body, file_name=cfg_file.name)
-    ...     print(cfg.file_name, len(list(cfg.generate_runs())))
-    multi-workflow.yml 5
-    simple-workflow.yml 1
+    Examples:
+        >>> dir_examples = Path(__file__).resolve().parent.parent / "examples"
+        >>> dir_examples.exists()
+        True
+        >>> for cfg_file in ConfigFile.load_from_folder(dir_examples):
+        ...     cfg = ConfigWorkflow(cfg_file.body, file_name=cfg_file.name)
+        ...     print(cfg.file_name, len(list(cfg.generate_runs())))
+        multi-workflow.yml 5
+        simple-workflow.yml 1
     """
 
     _RESTRICTED_PARAMETERS = ("env", "run")
     config_body: dict
     file_name: str
 
-    def __init__(self, config_body: dict, file_name: str = ""):
+    def __init__(self, config_body: dict, file_name: str = "") -> None:
+        """Initialize the workflow configuration.
+
+        Args:
+            config_body: Parsed YAML configuration dictionary.
+            file_name: Optional originating file name for diagnostics.
+        """
         self.config_body = config_body
         self.file_name = file_name
 
     @property
     def name(self) -> str:
-        """Get the name of the configuration."""
+        """Get the human-readable name of the workflow."""
         return self.config_body.get("name", "Lit Job")
 
     @property
     def trigger(self) -> dict | list | None:
-        """Get the trigger for the configuration."""
+        """Return the trigger definition for this workflow."""
         return self.config_body.get("trigger", [])
 
     def is_triggered_by_event(self, event: str, branch: str) -> bool:
-        """Check if the event is triggered by a code change."""
+        """Return True if this workflow triggers on the given event/branch.
+
+        Args:
+            event: GitHub event name, e.g., "push" or "pull_request".
+            branch: Branch name involved in the event.
+
+        Returns:
+            True if the trigger matches; otherwise False.
+        """
         return self._is_triggered_by_event(event, branch, self.config_body.get("trigger"))
 
     def append_repo_details(self, repo_owner: str, repo_name: str, head_sha: str, branch_ref: str) -> None:
-        """Append repository details to the configuration."""
+        """Append repository details to the configuration.
+
+        Args:
+            repo_owner: Repository owner login.
+            repo_name: Repository name.
+            head_sha: Commit SHA used to run.
+            branch_ref: Branch name (ref) associated with the event.
+        """
         self.config_body.update({
             "repository_owner": repo_owner,
             "repository_name": repo_name,
@@ -95,20 +122,30 @@ class ConfigWorkflow(ConfigBase):
     def _is_triggered_by_event(event: str, branch: str, trigger: dict | list | None = None) -> bool:
         """Check if the event is triggered by a code change.
 
-        >>> ConfigWorkflow._is_triggered_by_event("push", "main", {"push": {"branches": ["main"]}})
-        True
-        >>> ConfigWorkflow._is_triggered_by_event("pull_request", "main", {"pull_request": {"branches": ["main"]}})
-        True
-        >>> ConfigWorkflow._is_triggered_by_event("push", "feature", {"push": {"branches": ["main"]}})
-        False
-        >>> ConfigWorkflow._is_triggered_by_event("pull_request", "feature", {"pull_request": {"branches": ["main"]}})
-        False
-        >>> ConfigWorkflow._is_triggered_by_event("push", "main")
-        True
-        >>> ConfigWorkflow._is_triggered_by_event("pull_request", "main")
-        True
-        >>> ConfigWorkflow._is_triggered_by_event("issue_comment", "main", ["push"])
-        False
+        Args:
+            event: GitHub event name.
+            branch: Branch name involved in the event.
+            trigger: Trigger definition (dict/list) or None.
+
+        Returns:
+            True if the workflow should trigger for this event/branch; otherwise False.
+
+        Examples:
+            >>> ConfigWorkflow._is_triggered_by_event("push", "main", {"push": {"branches": ["main"]}})
+            True
+            >>> ConfigWorkflow._is_triggered_by_event("pull_request", "main", {"pull_request": {"branches": ["main"]}})
+            True
+            >>> ConfigWorkflow._is_triggered_by_event("push", "feature", {"push": {"branches": ["main"]}})
+            False
+            >>> ConfigWorkflow._is_triggered_by_event(
+            ...     "pull_request", "feature", {"pull_request": {"branches": ["main"]}})
+            False
+            >>> ConfigWorkflow._is_triggered_by_event("push", "main")
+            True
+            >>> ConfigWorkflow._is_triggered_by_event("pull_request", "main")
+            True
+            >>> ConfigWorkflow._is_triggered_by_event("issue_comment", "main", ["push"])
+            False
         """
         if not trigger:
             return True  # No specific trigger, assume all events are valid
@@ -126,30 +163,37 @@ class ConfigWorkflow(ConfigBase):
         return True  # if the event is fine but no branch specified
 
     @staticmethod
-    def _generate_matrix(parametrize: dict) -> list:
+    def _generate_matrix(parametrize: dict[str, Any]) -> list[dict[str, Any]]:
         """Generate a list of parameter dictionaries from YAML config matrix.
 
-        >>> config_multi = {
-        ...     "matrix": {
-        ...         "image": ["ubuntu", "windows"],
-        ...         "python": ["3.10", "3.11"]
-        ...     },
-        ...     "include": [{"python": "3.9", "image": "ubuntu"}],
-        ...     "exclude": [{"python": "3.10", "image": "windows"}]
-        ... }
-        >>> params = ConfigWorkflow._generate_matrix(config_multi)
-        >>> len(params)
-        4
-        >>> {"python": "3.11", "image": "windows"} in params
-        True
-        >>> {"python": "3.9", "image": "ubuntu"} in params
-        True
-        >>> {"python": "3.10", "image": "windows"} in params
-        False
+        Args:
+            parametrize: A dict potentially containing "matrix", "include", and "exclude" keys.
 
-        >>> empty_config = {}
-        >>> ConfigWorkflow._generate_matrix(empty_config)
-        [{}]
+        Returns:
+            A list of dictionaries, each representing a single parameter combination.
+
+        Examples:
+            >>> config_multi = {
+            ...     "matrix": {
+            ...         "image": ["ubuntu", "windows"],
+            ...         "python": ["3.10", "3.11"]
+            ...     },
+            ...     "include": [{"python": "3.9", "image": "ubuntu"}],
+            ...     "exclude": [{"python": "3.10", "image": "windows"}]
+            ... }
+            >>> params = ConfigWorkflow._generate_matrix(config_multi)
+            >>> len(params)
+            4
+            >>> {"python": "3.11", "image": "windows"} in params
+            True
+            >>> {"python": "3.9", "image": "ubuntu"} in params
+            True
+            >>> {"python": "3.10", "image": "windows"} in params
+            False
+
+            >>> empty_config = {}
+            >>> ConfigWorkflow._generate_matrix(empty_config)
+            [{}]
         """
         if not parametrize:
             # edge case: if the config is empty, return a list with an empty configuration
@@ -203,12 +247,16 @@ class ConfigWorkflow(ConfigBase):
         return filtered_combinations
 
     @property
-    def parametrize(self) -> dict:
-        """Get the parametrize section of the configuration."""
+    def parametrize(self) -> dict[str, Any]:
+        """Return the 'parametrize' section from the configuration."""
         return self.config_body.get("parametrize", {})
 
     def generate_runs(self) -> Generator["ConfigRun"]:
-        """Generate a list of ConfigRun objects from the configuration."""
+        """Generate a list of ConfigRun objects from the configuration.
+
+        Yields:
+            ConfigRun: One run configuration per parameter combination.
+        """
         for params in self._generate_matrix(self.parametrize):
             yield ConfigRun(config_body=self.config_body, params=params, file_name=self.file_name)
 
@@ -216,46 +264,54 @@ class ConfigWorkflow(ConfigBase):
 class ConfigRun(ConfigBase):
     """Configuration for a run, including matrix generation.
 
-    >>> dir_examples = Path(__file__).resolve().parent.parent / "examples"
-    >>> dir_examples.exists()
-    True
-    >>> cfg_files = ConfigFile.load_from_folder(dir_examples)
-    >>> cfg = ConfigWorkflow(cfg_files[0].body)
-    >>> runs = list(cfg.generate_runs())
-    >>> runs[0].name
-    'PR Validation Workflow'
-    >>> runs[0].image
-    'python:3.10-slim-bookworm'
-    >>> from pprint import pprint
-    >>> pprint(runs[0].env)
-    {'HELLO': 'world',
-     'TEST_ENV': 'ci',
-     'image': 'python:3.10-slim-bookworm',
-     'machine': 'CPU'}
+    Examples:
+        >>> dir_examples = Path(__file__).resolve().parent.parent / "examples"
+        >>> dir_examples.exists()
+        True
+        >>> cfg_files = ConfigFile.load_from_folder(dir_examples)
+        >>> cfg = ConfigWorkflow(cfg_files[0].body)
+        >>> runs = list(cfg.generate_runs())
+        >>> runs[0].name
+        'PR Validation Workflow'
+        >>> runs[0].image
+        'python:3.10-slim-bookworm'
+        >>> from pprint import pprint
+        >>> pprint(runs[0].env)
+        {'HELLO': 'world',
+         'TEST_ENV': 'ci',
+         'image': 'python:3.10-slim-bookworm',
+         'machine': 'CPU'}
     """
 
     config_body: dict
     params: dict
     file_name: str
 
-    def __init__(self, config_body: dict, params: dict, file_name: str):
+    def __init__(self, config_body: dict, params: dict, file_name: str) -> None:
+        """Initialize a ConfigRun.
+
+        Args:
+            config_body: The base workflow configuration dictionary.
+            params: Parameter combination produced by matrix expansion.
+            file_name: Source file name for this configuration.
+        """
         self.config_body = deepcopy(config_body)
         self.params = {k: v for k, v in params.items() if k not in ConfigWorkflow._RESTRICTED_PARAMETERS}
         self.file_name = file_name
 
     @property
     def name(self) -> str:
-        """Get the name of the configuration."""
+        """Return the run name."""
         return self.params.get("name") or self.config_body.get("name", "Lit Job")
 
     @property
     def run(self) -> str:
-        """Get the run command."""
+        """Return the shell command(s) to execute inside the container."""
         return self.config_body.get("run", "")
 
     @property
-    def env(self) -> dict:
-        """Get the environment variables."""
+    def env(self) -> dict[str, Any]:
+        """Return environment variables for the run."""
         envs = deepcopy(self.config_body.get("env", {}))
         envs.update(sanitize_params_for_env(self.params))
         # extra envs about the environment
@@ -265,42 +321,42 @@ class ConfigRun(ConfigBase):
 
     @property
     def image(self) -> str:
-        """Get the machine type."""
+        """Return the container image reference (e.g., 'ubuntu:22.04')."""
         return self.params.get("image") or self.config_body.get("image", "ubuntu:22.04")
 
     @property
     def machine(self) -> str:
-        """Get the machine type."""
+        """Return the machine type (e.g., 'CPU', 'GPU')."""
         return self.params.get("machine") or self.config_body.get("machine", "CPU")
 
     @property
     def interruptible(self) -> bool:
-        """Get the interruptible flag."""
+        """Return whether the job may be preempted (interruptible)."""
         return to_bool(self.params.get("interruptible") or self.config_body.get("interruptible", False))
 
     @property
     def timeout_minutes(self) -> float:
-        """Get the timeout flag."""
+        """Return the execution timeout in minutes."""
         return float(self.params.get("timeout") or self.config_body.get("timeout", 60))
 
     @property
     def repository_owner(self) -> str:
-        """Get the repository owner."""
+        """Return the repository owner login."""
         return self.config_body.get("repository_owner")
 
     @property
     def repository_name(self) -> str:
-        """Get the repository name."""
+        """Return the repository name."""
         return self.config_body.get("repository_name")
 
     @property
     def repository_ref(self) -> str:
-        """Get the repository ref."""
+        """Return the commit SHA reference for the run."""
         return self.config_body.get("repository_ref")
 
     @property
     def mode(self) -> str:
-        """The mode can be 'info' or 'debug'."""
+        """Return the mode string ('info' or 'debug')."""
         return self.config_body.get("mode", "info")
 
 
@@ -311,7 +367,16 @@ class ConfigFile(ConfigBase):
     name: str
     body: dict
 
-    def __init__(self, path: str | Path):
+    def __init__(self, path: str | Path) -> None:
+        """Load and parse a YAML workflow configuration file.
+
+        Args:
+            path: Path to the YAML configuration file.
+
+        Raises:
+            RuntimeError: If the file cannot be read or parsed as YAML.
+            ValueError: If the parsed content is not a non-empty mapping.
+        """
         self.path = Path(path)
         self.name = self.path.name
         try:  # todo: add specific exception and yaml validation
@@ -329,16 +394,26 @@ class ConfigFile(ConfigBase):
 
     @classmethod
     def load_from_folder(cls, path_dir: str | Path = ".lightning/workflows") -> list["ConfigFile"]:
-        """List all configuration files in the given path.
+        """List all configuration files in the given directory.
 
-        >>> dir_examples = Path(__file__).resolve().parent.parent / "examples"
-        >>> dir_examples.exists()
-        True
-        >>> configs = ConfigFile.load_from_folder(dir_examples)
-        >>> len(configs)
-        2
-        >>> [c.name for c in configs]
-        ['multi-workflow.yml', 'simple-workflow.yml']
+        Args:
+            path_dir: Directory that contains workflow YAML files.
+
+        Returns:
+            A list of ConfigFile instances sorted by file name.
+
+        Raises:
+            ValueError: If the directory does not exist.
+
+        Examples:
+            >>> dir_examples = Path(__file__).resolve().parent.parent / "examples"
+            >>> dir_examples.exists()
+            True
+            >>> configs = ConfigFile.load_from_folder(dir_examples)
+            >>> len(configs)
+            2
+            >>> [cfg.name for cfg in configs]
+            ['multi-workflow.yml', 'simple-workflow.yml']
         """
         path_dir = Path(path_dir).resolve()
         if not path_dir.is_dir():

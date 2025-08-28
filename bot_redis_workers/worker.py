@@ -8,12 +8,18 @@ import redis
 from bot_redis_workers import REDIS_QUEUE, REDIS_URL
 from bot_redis_workers.tasks import process_task_with_session
 
-if __name__ == "__main__":
+
+def main() -> None:
+    """Main worker loop that processes tasks from Redis queue.
+
+    Continuously polls the Redis queue for tasks and processes them using the async task processor.
+    Handles keyboard interrupts gracefully and re-enqueues failed tasks.
+    """
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
     logging.info("Starting worker...")
 
     # Connect to Redis (shared across workers)
-    redis_client = redis.from_url(REDIS_URL)
+    redis_client: redis.Redis = redis.from_url(REDIS_URL)
 
     while True:
         _, task_json = redis_client.blpop(REDIS_QUEUE)
@@ -31,3 +37,7 @@ if __name__ == "__main__":
             logging.debug(f"Successfully processed task: {task}")
 
     logging.info("Worker stopped.")
+
+
+if __name__ == "__main__":
+    main()

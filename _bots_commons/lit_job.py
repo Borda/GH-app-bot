@@ -32,7 +32,17 @@ box(){
 ANSI_ESCAPE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
 
 
-def _generate_script_content(export_envs, config_run, separator_str):
+def _generate_script_content(export_envs: str, config_run: str, separator_str: str) -> str:
+    """Build the bash script content that will run inside the container.
+
+    Args:
+        export_envs: Lines exporting env vars (e.g. "export A=1").
+        config_run: The user-provided command sequence to run.
+        separator_str: Unique marker used to split logs.
+
+    Returns:
+        The complete bash script content.
+    """
     return textwrap.dedent(f"""#!/bin/bash
 {export_envs}
 printenv
@@ -43,17 +53,43 @@ echo "{separator_str}"
 
 
 def strip_ansi(text: str) -> str:
+    """Remove ANSI escape sequences from logs.
+
+    Args:
+        text: Raw text possibly containing ANSI sequences.
+
+    Returns:
+        The cleaned text without ANSI escape sequences.
+    """
     return ANSI_ESCAPE.sub("", text)
 
 
-async def demo_sleeping_task(*args: Any, **kwargs: Any):
+async def demo_sleeping_task(*args: Any, **kwargs: Any) -> bool:
+    """Demo async task that sleeps and returns True.
+
+    Returns:
+        True after a short sleep.
+    """
     # Replace it with real logic; here we just succeed
     await asyncio.sleep(60)
     return True
 
 
 async def job_run(cfg_file_name: str, config: ConfigRun, gh_token: str, job_name: str) -> tuple[Job, str, str]:
-    """Download the full repo at `ref` into a tempdir, look for config and execute the job."""
+    """Download the repo inside the job workspace and execute the configured command.
+
+    Args:
+        cfg_file_name: Name of the workflow/config file (used for script naming).
+        config: Parsed run configuration.
+        gh_token: GitHub token to authenticate repository download.
+        job_name: Name to assign to the Lightning Job.
+
+    Returns:
+        A tuple of (job, logs_separator, exit_separator).
+
+    Raises:
+        AssertionError: If the config.run is empty.
+    """
     # mandatory
     assert config.run
     # optional
@@ -113,7 +149,17 @@ async def job_run(cfg_file_name: str, config: ConfigRun, gh_token: str, job_name
 
 
 def finalize_job(job: Job, logs_hash: str, exit_hash: str, debug: bool = False) -> tuple[Status, int | None, str]:
-    """Finalize the job by updating its status and logs."""
+    """Finalize job info and logs and compute the exit code if present.
+
+    Args:
+        job: The Lightning Job instance.
+        logs_hash: Unique marker delimiting the relevant logs.
+        exit_hash: Unique marker surrounding the numeric exit code in logs.
+        debug: If True, return the full logs without trimming.
+
+    Returns:
+        A tuple of (job_status, exit_code, logs). exit_code is None if not present.
+    """
     logs = strip_ansi(job.logs or "No logs available")
     search_exit_code = re.search(rf"{exit_hash}\n(\d+)\n{exit_hash}", logs)
     exit_code = int(search_exit_code.group(1)) if search_exit_code else None
@@ -125,7 +171,7 @@ def finalize_job(job: Job, logs_hash: str, exit_hash: str, debug: bool = False) 
         # cut the logs all before the cutoff string
         cutoff_index = logs.find(logs_hash)
         if cutoff_index == -1:
-            logging.warn(f"iter {it}: the cutoff string was not found in the logs")
+            logging.warning(f"iter {it}: the cutoff string was not found in the logs")
         logs = logs[cutoff_index + len(logs_hash) :]
 
     # todo: cleanup job if needed or success
