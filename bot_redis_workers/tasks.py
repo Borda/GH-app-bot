@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import shutil
 import traceback
 from datetime import datetime
@@ -19,18 +20,22 @@ from _bots_commons.configs import ConfigFile, ConfigRun, ConfigWorkflow, GitHubR
 from _bots_commons.downloads import download_repo_and_extract
 from _bots_commons.lit_job import finalize_job, job_run
 from _bots_commons.utils import (
-    _load_validate_required_env_vars,
     create_jwt_token,
     exceeded_timeout,
     extract_repo_details,
-    gh_patch_with_retry,
-    gh_post_with_retry,
+    load_validate_required_env_vars,
     wrap_long_text,
 )
 from bot_redis_workers import REDIS_QUEUE
+from bot_redis_workers._posts import (
+    post_gh_run_status_create_check,
+    post_gh_run_status_missing_configs,
+    post_gh_run_status_not_triggered,
+    post_gh_run_status_update_check,
+)
 
 MAX_OUTPUT_LENGTH = 65525  # GitHub API limit for check-run output.text
-LIT_JOB_QUEUE_TIMEOUT = 60 * 60  # 1 hour
+LIT_JOB_QUEUE_TIMEOUT = os.getenv("JOB_QUEUE_TIMEOUT", 60 * 60)  # default 1h in seconds
 LIT_STATUS_RUNNING = {Status.Running, Status.Stopping}
 LIT_STATUS_FINISHED = {Status.Completed, Status.Stopped, Status.Failed}
 LIT_STATUS_RUNNING_OR_FINISHED = LIT_STATUS_RUNNING | LIT_STATUS_FINISHED
@@ -126,100 +131,6 @@ def push_to_redis(redis_client: redis.Redis, task: dict[str, Any]) -> None:
     redis_client.rpush(REDIS_QUEUE, json.dumps(task))
 
 
-async def _post_gh_run_status_missing_configs(gh: GitHubAPI, gh_url: str, head_sha: str, text: str) -> None:
-    """Post a GitHub run status with missing configs."""
-    await gh_post_with_retry(
-        gh=gh,
-        url=gh_url,
-        data={
-            "name": "Lit bot",
-            "head_sha": head_sha,
-            "status": GitHubRunStatus.COMPLETED.value,
-            "conclusion": GitHubRunConclusion.SKIPPED.value,
-            "started_at": datetime.utcnow().isoformat() + "Z",
-            "output": {
-                "title": "No Configs Found",
-                "summary": "No valid configuration files found in `.lightning/workflows` folder.",
-                "text": text,
-            },
-        },
-    )
-
-
-async def _post_gh_run_status_not_triggered(
-    gh: GitHubAPI,
-    gh_url: str,
-    head_sha: str,
-    event_type: str,
-    branch_ref: str,
-    cfg_file: ConfigFile,
-    config: ConfigWorkflow,
-) -> None:
-    """Post a GitHub run status with missing configs."""
-    await gh_post_with_retry(
-        gh=gh,
-        url=gh_url,
-        data={
-            "name": f"{cfg_file.name} / {config.name} [{event_type}]",
-            "head_sha": head_sha,
-            "status": GitHubRunStatus.COMPLETED.value,
-            "conclusion": GitHubRunConclusion.SKIPPED.value,
-            "started_at": datetime.utcnow().isoformat() + "Z",
-            "output": {
-                "title": "Skipped",
-                "summary": f"Configuration `{cfg_file.name}` is not triggered"
-                f" by the event `{event_type}` on branch `{branch_ref}` (with `{config.trigger}`).",
-            },
-        },
-    )
-
-
-async def _post_gh_run_status_create_check(
-    gh: GitHubAPI, gh_url: str, head_sha: str, run_name: str, link_lit_jobs: str
-) -> str:
-    """Create a GitHub run status."""
-    check = await gh_post_with_retry(
-        gh=gh,
-        url=gh_url,
-        data={
-            "name": run_name,
-            "head_sha": head_sha,
-            "status": GitHubRunStatus.QUEUED.value,
-            "details_url": link_lit_jobs,
-        },
-    )
-    return check["id"]
-
-
-async def _post_gh_run_status_update_check(
-    gh: GitHubAPI,
-    gh_url: str,
-    title: str,
-    run_status: GitHubRunStatus,
-    run_conclusion: GitHubRunConclusion | None = None,
-    started_at: str = "",
-    url_job: str = "",
-    summary: str = "",
-    text: str = "",
-) -> None:
-    """Update a GitHub run status."""
-    if not started_at:
-        started_at = datetime.utcnow().isoformat() + "Z"
-    patch_data = {
-        "status": run_status.value,
-        "started_at": started_at,
-        "output": {"summary": summary},
-        "details_url": url_job,
-    }
-    if title:
-        patch_data["output"].update({"title": title})
-    if text:
-        patch_data["output"].update({"text": text})
-    if run_conclusion:
-        patch_data.update({"conclusion": run_conclusion.value})
-    await gh_patch_with_retry(gh=gh, url=gh_url, data=patch_data)
-
-
 async def process_task_with_session(task: dict[str, Any], redis_client: redis.Redis) -> None:
     """Wrapper that manages an aiohttp session for end-to-end task processing.
 
@@ -247,7 +158,7 @@ async def process_job_pending(gh: GitHubAPI, task: dict[str, Any], lit_job: Job)
     url_check_id = f"/repos/{config_run.repository_owner}/{config_run.repository_name}/check-runs/{task['check_id']}"
     if exceeded_timeout(task["job_start_time"], timeout_seconds=LIT_JOB_QUEUE_TIMEOUT):
         lit_job.stop()
-        await _post_gh_run_status_update_check(
+        await post_gh_run_status_update_check(
             gh=gh,
             gh_url=url_check_id,
             title="Job has timed out",
@@ -261,7 +172,7 @@ async def process_job_pending(gh: GitHubAPI, task: dict[str, Any], lit_job: Job)
         task.update({"phase": TaskPhase.FAILURE.value})
         return task
 
-    await _post_gh_run_status_update_check(
+    await post_gh_run_status_update_check(
         gh=gh,
         gh_url=url_check_id,
         title="Job is pending",
@@ -289,7 +200,7 @@ async def process_job_running(gh: GitHubAPI, task: dict[str, Any], lit_job: Job)
     url_check_id = f"/repos/{config_run.repository_owner}/{config_run.repository_name}/check-runs/{task['check_id']}"
     if exceeded_timeout(task["job_start_time"], timeout_seconds=config_run.timeout_minutes * 60):
         lit_job.stop()
-        await _post_gh_run_status_update_check(
+        await post_gh_run_status_update_check(
             gh=gh,
             gh_url=url_check_id,
             title="Job has timed out",
@@ -307,7 +218,7 @@ async def process_job_running(gh: GitHubAPI, task: dict[str, Any], lit_job: Job)
     if Status(task["job_status"]) not in LIT_STATUS_RUNNING_OR_FINISHED:
         task.update({"job_status": lit_job.status.value, "job_start_time": datetime.utcnow().isoformat() + "Z"})
 
-    await _post_gh_run_status_update_check(
+    await post_gh_run_status_update_check(
         gh=gh,
         gh_url=url_check_id,
         title="Job is running",
@@ -329,7 +240,7 @@ async def _get_gh_app_token(session: ClientSession, payload: dict[str, Any]) -> 
     Returns:
         Installation access token string.
     """
-    github_app_id, app_private_key, webhook_secret = _load_validate_required_env_vars()
+    github_app_id, app_private_key, webhook_secret = load_validate_required_env_vars()
     jwt_token = create_jwt_token(github_app_id=github_app_id, app_private_key=app_private_key)
     # Exchange JWT for installation token
     app_gh = GitHubAPI(session, "bot_redis_workers", oauth_token=jwt_token)
@@ -411,7 +322,7 @@ async def _process_task_inner(task: dict[str, Any], redis_client: redis.Redis, s
             text_error = (
                 f"```console\n{config_error!s}\n```" if config_error else "No specific error details available."
             )
-            await _post_gh_run_status_missing_configs(text=text_error, **post_kwargs)
+            await post_gh_run_status_missing_configs(text=text_error, **post_kwargs)
             return
         for cfg_file in config_files:
             config = ConfigWorkflow(cfg_file.body, file_name=cfg_file.name)
@@ -421,7 +332,7 @@ async def _process_task_inner(task: dict[str, Any], redis_client: redis.Redis, s
             if not config.is_triggered_by_event(event=event_type, branch=branch_ref):
                 if event_type in config.trigger:
                     # there is a trigger for this event, but it is not matched
-                    await _post_gh_run_status_not_triggered(
+                    await post_gh_run_status_not_triggered(
                         event_type=event_type, branch_ref=branch_ref, cfg_file=cfg_file, config=config, **post_kwargs
                     )
                 # skip this config if it is not triggered by the event
@@ -451,7 +362,7 @@ async def _process_task_inner(task: dict[str, Any], redis_client: redis.Redis, s
         run_name = f"{config_run.file_name} / {config_run.name} ({', '.join(run_params)})"
         # Create a check run
         link_lightning_jobs = f"{LIGHTNING_CLOUD_URL}/{this_teamspace().owner.name}/{this_teamspace().name}/jobs/"
-        check_id = await _post_gh_run_status_create_check(
+        check_id = await post_gh_run_status_create_check(
             run_name=run_name, link_lit_jobs=link_lightning_jobs, **post_kwargs
         )
         url_check_id = f"/repos/{repo_owner}/{repo_name}/check-runs/{check_id}"
@@ -466,7 +377,7 @@ async def _process_task_inner(task: dict[str, Any], redis_client: redis.Redis, s
         except Exception as ex:
             logging.error(f"Failed to run job '{job_name}': {ex!s}\n{traceback.format_exc()}")
             text = f"```console\n{ex!s}\n```" if debug_mode else "No specific error details available."
-            await _post_gh_run_status_update_check(
+            await post_gh_run_status_update_check(
                 gh=gh,
                 gh_url=url_check_id,
                 title="Failed to run litJob",
@@ -546,7 +457,7 @@ async def _process_task_inner(task: dict[str, Any], redis_client: redis.Redis, s
         else:  # if the job failed
             run_conclusion = GitHubRunConclusion.FAILURE
         results = wrap_long_text(results, text_length=MAX_OUTPUT_LENGTH - 20)  # wrap the results to fit in the output
-        await _post_gh_run_status_update_check(
+        await post_gh_run_status_update_check(
             gh=gh,
             gh_url=url_check_id,
             title="Job finished",

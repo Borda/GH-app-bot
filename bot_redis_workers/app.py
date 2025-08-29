@@ -5,7 +5,7 @@ import redis
 from aiohttp import ClientSession, web
 from gidgethub import routing, sansio
 
-from _bots_commons.utils import _load_validate_required_env_vars, extract_repo_details
+from _bots_commons.utils import extract_repo_details, load_validate_required_env_vars
 from bot_redis_workers import REDIS_QUEUE, REDIS_URL
 from bot_redis_workers.tasks import TaskPhase
 
@@ -48,7 +48,7 @@ async def main(request: web.Request) -> web.Response:
         HTTP 200 for ACK or errors if parsing fails.
     """
     # Load and validate all environment vars exactly once
-    _, _, webhook_secret = _load_validate_required_env_vars()
+    _, _, webhook_secret = load_validate_required_env_vars()
     body = await request.read()
     app = request.app
 

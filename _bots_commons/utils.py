@@ -194,7 +194,7 @@ def sanitize_params_for_env(params: dict) -> dict:
     return sanitized_params
 
 
-def _load_validate_required_env_vars() -> tuple[int, str, str]:
+def load_validate_required_env_vars() -> tuple[int, str, str]:
     """Ensure required environment variables are set.
 
     Returns:

@@ -6,7 +6,7 @@ from gidgethub import routing, sansio
 from gidgethub.aiohttp import GitHubAPI
 from gidgethub.apps import get_installation_access_token
 
-from _bots_commons.utils import _load_validate_required_env_vars, create_jwt_token
+from _bots_commons.utils import create_jwt_token, load_validate_required_env_vars
 
 # async def handle_webhook(request):
 #     print("=== webhook hit ===")
@@ -78,7 +78,7 @@ async def handle_request(request: web.Request) -> web.Response:
     Returns:
         An HTTP response acknowledging receipt (200) or an error (400).
     """
-    github_app_id, app_private_key, webhook_secret = _load_validate_required_env_vars()
+    github_app_id, app_private_key, webhook_secret = load_validate_required_env_vars()
 
     try:
         # Read the raw body, handling client disconnects
