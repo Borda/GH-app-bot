@@ -1,6 +1,5 @@
 import json
 import logging
-import os
 import shutil
 import traceback
 from datetime import datetime
@@ -16,9 +15,17 @@ from gidgethub.apps import get_installation_access_token
 from lightning_sdk import Job, Status, Teamspace
 from lightning_sdk.lightning_cloud.env import LIGHTNING_CLOUD_URL
 
+from _bots_commons import LOCAL_TEMP_DIR, MAX_OUTPUT_LENGTH
 from _bots_commons.configs import ConfigFile, ConfigRun, ConfigWorkflow, GitHubRunConclusion, GitHubRunStatus
 from _bots_commons.downloads import download_repo_and_extract
-from _bots_commons.lit_job import finalize_job, job_run
+from _bots_commons.lit_job import (
+    LIT_JOB_QUEUE_TIMEOUT,
+    LIT_STATUS_FINISHED,
+    LIT_STATUS_RUNNING,
+    LIT_STATUS_RUNNING_OR_FINISHED,
+    finalize_job,
+    job_run,
+)
 from _bots_commons.utils import (
     create_jwt_token,
     exceeded_timeout,
@@ -33,14 +40,6 @@ from bot_redis_workers._posts import (
     post_gh_run_status_not_triggered,
     post_gh_run_status_update_check,
 )
-
-MAX_OUTPUT_LENGTH = 65525  # GitHub API limit for check-run output.text
-LIT_JOB_QUEUE_TIMEOUT = os.getenv("JOB_QUEUE_TIMEOUT", 60 * 60)  # default 1h in seconds
-LIT_STATUS_RUNNING = {Status.Running, Status.Stopping}
-LIT_STATUS_FINISHED = {Status.Completed, Status.Stopped, Status.Failed}
-LIT_STATUS_RUNNING_OR_FINISHED = LIT_STATUS_RUNNING | LIT_STATUS_FINISHED
-LOCAL_ROOT_DIR = Path(__file__).parent
-LOCAL_TEMP_DIR = LOCAL_ROOT_DIR / ".temp"
 
 
 class TaskPhase(Enum):

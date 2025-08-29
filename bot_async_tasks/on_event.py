@@ -10,25 +10,25 @@ from typing import Any
 from aiohttp import ClientSession, ClientTimeout
 from gidgethub import sansio
 from gidgethub.aiohttp import GitHubAPI
-from lightning_sdk import Status, Teamspace
+from lightning_sdk import Teamspace
 from lightning_sdk.lightning_cloud.env import LIGHTNING_CLOUD_URL
 
+from _bots_commons import LOCAL_TEMP_DIR, MAX_OUTPUT_LENGTH
 from _bots_commons.configs import ConfigFile, ConfigRun, ConfigWorkflow, GitHubRunConclusion, GitHubRunStatus
 from _bots_commons.downloads import download_repo_and_extract
-from _bots_commons.lit_job import finalize_job, job_run
+from _bots_commons.lit_job import (
+    LIT_JOB_QUEUE_INTERVAL,
+    LIT_JOB_QUEUE_TIMEOUT,
+    LIT_STATUS_RUNNING_OR_FINISHED,
+    finalize_job,
+    job_run,
+)
 from _bots_commons.utils import (
     extract_repo_details,
     gh_patch_with_retry,
     gh_post_with_retry,
     wrap_long_text,
 )
-
-JOB_QUEUE_TIMEOUT = 60 * 60  # 1 hour
-JOB_QUEUE_INTERVAL = 10  # 10 seconds
-STATUS_RUNNING_OR_FINISHED = {Status.Running, Status.Stopping, Status.Completed, Status.Stopped, Status.Failed}
-MAX_OUTPUT_LENGTH = 65525  # GitHub API limit for check-run output.text
-LOCAL_ROOT_DIR = Path(__file__).parent
-LOCAL_TEMP_DIR = LOCAL_ROOT_DIR / ".temp"
 
 
 @lru_cache
@@ -288,14 +288,14 @@ async def complete_run(
         )
         queue_start = asyncio.get_event_loop().time()
         while True:
-            if job.status in STATUS_RUNNING_OR_FINISHED:
+            if job.status in LIT_STATUS_RUNNING_OR_FINISHED:
                 break
-            if asyncio.get_event_loop().time() - queue_start > JOB_QUEUE_TIMEOUT:
+            if asyncio.get_event_loop().time() - queue_start > LIT_JOB_QUEUE_TIMEOUT:
                 run_status, run_conclusion = GitHubRunStatus.COMPLETED, GitHubRunConclusion.CANCELLED
-                summary = f"Job `{job_name}` didn't start within the provided ({JOB_QUEUE_TIMEOUT}) timeout."
+                summary = f"Job `{job_name}` didn't start within the provided ({LIT_JOB_QUEUE_TIMEOUT}) timeout."
                 job.stop()
                 break
-            await asyncio.sleep(JOB_QUEUE_INTERVAL)
+            await asyncio.sleep(LIT_JOB_QUEUE_INTERVAL)
         run_status = GitHubRunStatus.IN_PROGRESS
 
     if run_status == GitHubRunStatus.IN_PROGRESS:

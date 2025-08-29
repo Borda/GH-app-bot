@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import re
 import shlex
 import textwrap
@@ -10,6 +11,12 @@ from lightning_sdk import Job, Machine, Status
 from _bots_commons.configs import ConfigRun
 from _bots_commons.downloads import _RELATIVE_PATH_DOWNLOAD
 from _bots_commons.utils import generate_unique_hash
+
+LIT_JOB_QUEUE_TIMEOUT = os.getenv("JOB_QUEUE_TIMEOUT", 60 * 60)  # default 1h in seconds
+LIT_JOB_QUEUE_INTERVAL = 10  # 10 seconds
+LIT_STATUS_RUNNING = {Status.Running, Status.Stopping}
+LIT_STATUS_FINISHED = {Status.Completed, Status.Stopped, Status.Failed}
+LIT_STATUS_RUNNING_OR_FINISHED = LIT_STATUS_RUNNING | LIT_STATUS_FINISHED
 
 BASH_BOX_FUNC = textwrap.dedent("""\
 box(){
