@@ -14,37 +14,74 @@ The code is written in Python and uses `gidgethub[aiohttp]` for webhook handling
 - Restart resistance: Unprocessed tasks remain in the queue if workers crash.
 - Minimal and organized code structure.
 
-## Requirements
+## Setup - Create a GitHub App
 
-### Python Packages
+- Go to [GitHub Apps](https://github.com/settings/apps) and create a new app.
+- Set webhook URL to your server's endpoint (e.g., `https://your-domain.com/`).
+- Note down: App ID, Private Key (PEM file), Webhook Secret.
+- Install the app on target repositories and subscribe to "Pull requests" events.
 
-Install the Python dependencies listed in `requirements.txt`
+## How to Start
 
-### Additional Installations (Beyond requirements.txt)
+### Using Docker Compose
 
-- **Redis Server**: This is required for the queue system. Redis is not a Python package, so install it separately on your system:
-  - On macOS: `brew install redis`
-  - On Ubuntu/Debian: `sudo apt update && sudo apt install redis-server`
-  - On Windows: Use WSL or download from the official Redis website.
-  - Verify installation: Run `redis-server --version`
-- No other external tools are needed, but ensure you have Git installed if using `gitpython` for repo cloning (usually pre-installed on most systems).
+Quickly bring up Redis, the webhook app, and workers with one command.
 
-## Setup
+1. **Prerequisites:**
 
-1. **Create a GitHub App**:
+   - Install Docker and Docker Compose on your machine.
+   - Ensure you have your GitHub App credentials: GH_APP_ID, GH_PRIVATE_KEY (PEM content), GH_WEBHOOK_SECRET.
 
-   - Go to [GitHub Apps](https://github.com/settings/apps) and create a new app.
-   - Set webhook URL to your server's endpoint (e.g., `https://your-domain.com/`).
-   - Note down: App ID, Private Key (PEM file), Webhook Secret.
-   - Install the app on target repositories and subscribe to "Pull requests" events.
+2. **Set environment variables:**
 
-2. **Environment Variables**:
-   Set these in your shell or a `.env` file (load with `dotenv` if needed, but not included here for minimalism):
+   - __Option A (recommended)__: create a `.env` file in the project root with:
+     - `GH_APP_ID=...`
+     - `GH_PRIVATE_KEY="..."`
+     - `GH_WEBHOOK_SECRET=...`
+   - Option B: export them in your shell before running Compose.
 
-   - `GH_APP_ID`: Your GitHub App ID.
-   - `GH_PRIVATE_KEY`: The content of your private key PEM file (use `$(cat path/to/private-key.pem)`).
-   - `GH_WEBHOOK_SECRET`: Your webhook secret.
-   - `REDIS_URL`: Optional; defaults to `redis://localhost:6379/0`. Change if using a remote Redis.
+3. **Start services:**
+
+   - Run: `docker-compose up -d`
+   - This starts:
+     - Redis (default port 6379)
+     - Webhook server (port 8080)
+     - One or more workers
+
+4. **Check logs:**
+
+   - All services: `docker-compose logs -f`
+   - App only: `docker-compose logs -f app`
+   - Worker only: `docker-compose logs -f worker`
+
+5. **Scale workers** - Increase to 5 workers: `docker-compose up -d --scale worker=5`
+
+6. **Stop and clean up** - `docker-compose down`
+
+7. **Point your GitHub App webhook:**
+
+   - Use your server’s public URL on port 8080 (e.g., https://your-host:8080/).
+   - For local development, expose 8080 publicly using a tunneling tool and set the webhook URL accordingly.
+
+### Manual Setup
+
+Install the **Python dependencies** listed in `requirements.txt`
+
+**Redis Server**:
+This is required for the queue system. Redis is not a Python package, so install it separately on your system:
+
+- On macOS: `brew install redis`
+- On Ubuntu/Debian: `sudo apt update && sudo apt install redis-server`
+- On Windows: Use WSL or download from the official Redis website.
+- Verify installation: Run `redis-server --version`
+
+**Environment Variables**:
+Set these in your shell or a `.env` file (load with `dotenv` if needed, but not included here for minimalism):
+
+- `GH_APP_ID`: Your GitHub App ID.
+- `GH_PRIVATE_KEY`: The content of your private key PEM file (use `$(cat path/to/private-key.pem)`).
+- `GH_WEBHOOK_SECRET`: Your webhook secret.
+- `REDIS_URL`: Optional; defaults to `redis://localhost:6379/0`. Change if using a remote Redis.
 
 ## Task Lifecycle
 
@@ -171,32 +208,81 @@ This phased approach allows workers to handle tasks concurrently. If a worker re
 ◀───           Re-queue loop
 ```
 
-## How to Start
+1. **Install Dependencies**:
 
-1. **Start Redis Server**:
+   ```bash
+   # Install Python dependencies
+   pip install -r requirements.txt
 
-   - Run `redis-server` in a terminal (or as a background service: `redis-server &`).
-   - Confirm it's running: `redis-cli ping` should return "PONG".
+   # Install Redis server
+   # macOS: brew install redis
+   # Ubuntu: sudo apt install redis-server
+   # Windows: Use WSL or Redis for Windows
+   ```
 
-2. **Start the Webhook Server**:
+2. **Set Environment Variables**:
 
-   - Run `python app.py`.
-   - The server listens on port 8080
+   ```bash
+   export GH_APP_ID="123456"
+   export GH_PRIVATE_KEY="$(cat path/to/private-key.pem)"
+   export GH_WEBHOOK_SECRET="your_webhook_secret"
+   export REDIS_URL="redis://localhost:6379/0"  # optional
+   ```
 
-3. **Start Workers**:
+3. **Start Services**:
 
-   - Open one or more terminals.
-   - In each, run `python worker.py`.
-   - Start with 2-5 workers for a basic pool; scale based on load.
-   - Workers run in an infinite loop, popping and processing tasks from the queue.
+   ```bash
+   # Terminal 1: Start Redis
+   redis-server
 
-4. **Testing**:
+   # Terminal 2: Start webhook server
+   cd bot_redis_workers
+   python app.py
 
-   - Create or update a PR in a repo where the GitHub App is installed.
-   - Monitor console logs in `app.py` and `worker.py` for enqueue/dequeue actions.
-     - Use `redis-cli` to inspect the queue: `llen bot_queue` (length) or `lrange bot_queue 0 -1` (view tasks).
-     - Use `redis-cli` to clean the queue: `del bot_queue` (delete all tasks).
-   - Simulate restarts: Kill a worker; tasks should be picked up by others.
+   # Terminal 3: Start worker
+   cd bot_redis_workers
+   python worker.py
+
+   # Terminal 4: Start additional workers (optional)
+   cd bot_redis_workers
+   python worker.py
+   ```
+
+4. **Verify Setup**:
+
+   ```bash
+   # Check Redis connection
+   redis-cli ping  # Should return "PONG"
+
+   # Check webhook server
+   curl -X POST http://localhost:8080/
+
+   # Monitor logs in terminals running app.py and worker.py
+   ```
+
+## Testing and Usage
+
+1. **Create or Update a PR**:
+
+   - Go to a repository where your GitHub App is installed
+   - Create/update a pull request to trigger webhook events
+
+2. **Monitor Activity**:
+
+   ```bash
+   # Check Redis queue
+   redis-cli LLEN bot_queue      # Queue length
+   redis-cli LRANGE bot_queue 0 -1  # View all tasks
+
+   # Clear queue if needed
+   redis-cli DEL bot_queue
+   ```
+
+3. **Expected Behavior**:
+
+   - Webhook server logs: "Enqueued new_event for PR..."
+   - Worker logs: "Successfully processed task..."
+   - GitHub: Check runs appear on PR with status updates
 
 ## Code Structure
 
