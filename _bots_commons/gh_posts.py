@@ -9,9 +9,7 @@ from gidgethub.aiohttp import GitHubAPI
 from gidgethub.apps import get_installation_access_token
 
 from _bots_commons.configs import ConfigFile, ConfigWorkflow, GitHubRunConclusion, GitHubRunStatus
-from _bots_commons.utils import (
-    load_validate_required_env_vars,
-)
+from _bots_commons.utils import load_validate_required_env_vars
 
 
 async def post_gh_run_status_missing_configs(gh: GitHubAPI, gh_url: str, head_sha: str, text: str) -> None:

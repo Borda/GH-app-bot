@@ -33,11 +33,7 @@ from _bots_commons.lit_job import (
     finalize_job,
     job_run,
 )
-from _bots_commons.utils import (
-    exceeded_timeout,
-    extract_repo_details,
-    wrap_long_text,
-)
+from _bots_commons.utils import exceeded_timeout, extract_repo_details, wrap_long_text
 from bot_redis_workers import REDIS_QUEUE
 
 
