@@ -36,6 +36,9 @@ async def handle_code_event(event: sansio.Event, redis_client: redis.Redis) -> N
         logging.info(f"Enqueued new_event for `PR` \t{repo_owner}/{repo_name}#{pr_number}")
     elif event.event == "push":
         logging.info(f"Enqueued new_event for `push` \t{repo_owner}/{repo_name}@{head_sha[:7]}")
+    elif event.event == "check_run":
+        run_id = payload["check_run"]["id"]
+        logging.info(f"Enqueued new_event for `check_run` \t{repo_owner}/{repo_name}@{head_sha[:7]} -> {run_id}")
 
 
 async def main(request: web.Request) -> web.Response:
@@ -81,6 +84,7 @@ async def init_app() -> web.Application:
     router = routing.Router()
     router.add(handle_code_event, event_type="push")
     router.add(handle_code_event, event_type="pull_request", action="synchronize")
+    router.add(handle_code_event, event_type="check_run", action="rerequested")
 
     # Create the aiohttp application
     app = web.Application()

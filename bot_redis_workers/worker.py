@@ -22,7 +22,10 @@ def main() -> None:
     redis_client: redis.Redis = redis.from_url(REDIS_URL)
 
     while True:
-        _, task_json = redis_client.blpop(REDIS_QUEUE)
+        try:
+            _, task_json = redis_client.blpop(REDIS_QUEUE)
+        except KeyboardInterrupt:
+            break
         task = json.loads(task_json)
         try:
             asyncio.run(process_task_with_session(task, redis_client))
