@@ -1,4 +1,3 @@
-import asyncio
 import hashlib
 import os
 import re
@@ -8,9 +7,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from textwrap import TextWrapper
 from typing import Any
-
-import jwt
-from aiohttp import client_exceptions
 
 
 def generate_unique_hash(length: int = 16, params: dict | None = None) -> str:
@@ -218,23 +214,6 @@ def load_validate_required_env_vars() -> tuple[int, str, str]:
     return int(github_app_id), private_key, webhook_secret
 
 
-def create_jwt_token(github_app_id: int, app_private_key: str) -> str:
-    """Create a JWT token for authenticating with the GitHub API.
-
-    Args:
-        github_app_id: GitHub App ID.
-        app_private_key: PEM-encoded private key.
-
-    Returns:
-        Encoded JWT string.
-    """
-    return jwt.encode(
-        {"iat": int(time.time()) - 60, "exp": int(time.time()) + (10 * 60), "iss": github_app_id},
-        app_private_key,
-        algorithm="RS256",
-    )
-
-
 def extract_repo_details(event_type: str, payload: dict) -> tuple[str, str, str, str]:
     """Extract repository owner, name, head SHA, and branch ref from the payload.
 
@@ -254,63 +233,16 @@ def extract_repo_details(event_type: str, payload: dict) -> tuple[str, str, str,
     elif event_type == "pull_request":
         head_sha = payload["pull_request"]["head"]["sha"]
         branch_ref = payload["pull_request"]["base"]["ref"]
+    elif event_type == "check_run":
+        head_sha = payload["check_run"]["head_sha"]
+        prs = payload["check_run"]["pull_requests"]
+        branch_refs = [pr["base"]["ref"] for pr in prs]
+        branch_ref = branch_refs[0] if branch_refs else "unknown"
     else:
         raise ValueError(f"Unsupported event type: {event_type}")
     repo_owner = payload["repository"]["owner"]["login"]
     repo_name = payload["repository"]["name"]
     return repo_owner, repo_name, head_sha, branch_ref
-
-
-async def gh_post_with_retry(gh: Any, url: str, data: dict, retries: int = 3, backoff: float = 1.0) -> Any:
-    """POST to GitHub API with simple retry on ServerDisconnectedError.
-
-    Args:
-        gh: GitHub API client (e.g., gidgethub.aiohttp.GitHubAPI).
-        url: API endpoint path.
-        data: JSON-serializable payload.
-        retries: Number of retries.
-        backoff: Base backoff seconds (linear backoff: backoff * attempt).
-
-    Returns:
-        The response from gh.post or None if all retries fail.
-
-    Raises:
-        client_exceptions.ServerDisconnectedError: Propagates on final attempt.
-    """
-    for it in range(1, retries + 1):
-        try:
-            return await gh.post(url, data=data)
-        except client_exceptions.ServerDisconnectedError:
-            if it == retries:
-                raise
-            await asyncio.sleep(backoff * it)
-    return None
-
-
-async def gh_patch_with_retry(gh: Any, url: str, data: dict, retries: int = 3, backoff: float = 1.0) -> Any:
-    """PATCH to GitHub API with simple retry on ServerDisconnectedError.
-
-    Args:
-        gh: GitHub API client (e.g., gidgethub.aiohttp.GitHubAPI).
-        url: API endpoint path.
-        data: JSON-serializable payload.
-        retries: Number of retries.
-        backoff: Base backoff seconds (linear backoff: backoff * attempt).
-
-    Returns:
-        The response from gh.patch or None if all retries fail.
-
-    Raises:
-        client_exceptions.ServerDisconnectedError: Propagates on final attempt.
-    """
-    for it in range(1, retries + 1):
-        try:
-            return await gh.patch(url, data=data)
-        except client_exceptions.ServerDisconnectedError:
-            if it == retries:
-                raise
-            await asyncio.sleep(backoff * it)
-    return None
 
 
 def exceeded_timeout(start_time: str | datetime | float, timeout_seconds: float = 10) -> bool:

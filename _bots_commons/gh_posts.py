@@ -1,15 +1,15 @@
+import asyncio
+import time
 from datetime import datetime
 from typing import Any
 
-from aiohttp import ClientSession
+import jwt
+from aiohttp import ClientSession, client_exceptions
 from gidgethub.aiohttp import GitHubAPI
 from gidgethub.apps import get_installation_access_token
 
 from _bots_commons.configs import ConfigFile, ConfigWorkflow, GitHubRunConclusion, GitHubRunStatus
 from _bots_commons.utils import (
-    create_jwt_token,
-    gh_patch_with_retry,
-    gh_post_with_retry,
     load_validate_required_env_vars,
 )
 
@@ -124,3 +124,72 @@ async def _get_gh_app_token(session: ClientSession, payload: dict[str, Any]) -> 
         app_gh, installation_id=installation_id, app_id=str(github_app_id), private_key=app_private_key
     )
     return token_resp["token"]
+
+
+def create_jwt_token(github_app_id: int, app_private_key: str) -> str:
+    """Create a JWT token for authenticating with the GitHub API.
+
+    Args:
+        github_app_id: GitHub App ID.
+        app_private_key: PEM-encoded private key.
+
+    Returns:
+        Encoded JWT string.
+    """
+    return jwt.encode(
+        {"iat": int(time.time()) - 60, "exp": int(time.time()) + (10 * 60), "iss": github_app_id},
+        app_private_key,
+        algorithm="RS256",
+    )
+
+
+async def gh_post_with_retry(gh: Any, url: str, data: dict, retries: int = 3, backoff: float = 1.0) -> Any:
+    """POST to GitHub API with simple retry on ServerDisconnectedError.
+
+    Args:
+        gh: GitHub API client (e.g., gidgethub.aiohttp.GitHubAPI).
+        url: API endpoint path.
+        data: JSON-serializable payload.
+        retries: Number of retries.
+        backoff: Base backoff seconds (linear backoff: backoff * attempt).
+
+    Returns:
+        The response from gh.post or None if all retries fail.
+
+    Raises:
+        client_exceptions.ServerDisconnectedError: Propagates on final attempt.
+    """
+    for it in range(1, retries + 1):
+        try:
+            return await gh.post(url, data=data)
+        except client_exceptions.ServerDisconnectedError:
+            if it == retries:
+                raise
+            await asyncio.sleep(backoff * it)
+    return None
+
+
+async def gh_patch_with_retry(gh: Any, url: str, data: dict, retries: int = 3, backoff: float = 1.0) -> Any:
+    """PATCH to GitHub API with simple retry on ServerDisconnectedError.
+
+    Args:
+        gh: GitHub API client (e.g., gidgethub.aiohttp.GitHubAPI).
+        url: API endpoint path.
+        data: JSON-serializable payload.
+        retries: Number of retries.
+        backoff: Base backoff seconds (linear backoff: backoff * attempt).
+
+    Returns:
+        The response from gh.patch or None if all retries fail.
+
+    Raises:
+        client_exceptions.ServerDisconnectedError: Propagates on final attempt.
+    """
+    for it in range(1, retries + 1):
+        try:
+            return await gh.patch(url, data=data)
+        except client_exceptions.ServerDisconnectedError:
+            if it == retries:
+                raise
+            await asyncio.sleep(backoff * it)
+    return None

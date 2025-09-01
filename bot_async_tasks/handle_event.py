@@ -6,7 +6,8 @@ from gidgethub import routing, sansio
 from gidgethub.aiohttp import GitHubAPI
 from gidgethub.apps import get_installation_access_token
 
-from _bots_commons.utils import create_jwt_token, load_validate_required_env_vars
+from _bots_commons.gh_posts import create_jwt_token
+from _bots_commons.utils import load_validate_required_env_vars
 
 # async def handle_webhook(request):
 #     print("=== webhook hit ===")

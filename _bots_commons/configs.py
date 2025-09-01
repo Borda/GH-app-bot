@@ -146,9 +146,13 @@ class ConfigWorkflow(ConfigBase):
             True
             >>> ConfigWorkflow._is_triggered_by_event("issue_comment", "main", ["push"])
             False
+            >>> ConfigWorkflow._is_triggered_by_event("check_run", "main", ["push", "pull_request"])
+            True
         """
         if not trigger:
             return True  # No specific trigger, assume all events are valid
+        if event in ("check_run",):
+            return True  # this assumes that the event was once validated
         # if isinstance(trigger, str):
         #     return trigger == event
         if isinstance(trigger, list):
@@ -303,6 +307,11 @@ class ConfigRun(ConfigBase):
     def name(self) -> str:
         """Return the run name."""
         return self.params.get("name") or self.config_body.get("name", "Lit Job")
+
+    @property
+    def check_name(self) -> str:
+        run_params = [p or "n/a" for p in self.params.values()]
+        return f"{self.file_name} / {self.name} ({', '.join(run_params)})"
 
     @property
     def run(self) -> str:

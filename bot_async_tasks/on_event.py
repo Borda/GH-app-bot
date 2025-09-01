@@ -16,7 +16,12 @@ from lightning_sdk.lightning_cloud.env import LIGHTNING_CLOUD_URL
 from _bots_commons import LOCAL_TEMP_DIR, MAX_OUTPUT_LENGTH
 from _bots_commons.configs import ConfigFile, ConfigRun, ConfigWorkflow, GitHubRunConclusion, GitHubRunStatus
 from _bots_commons.downloads import download_repo_and_extract
-from _bots_commons.gh_posts import post_gh_run_status_missing_configs, post_gh_run_status_not_triggered
+from _bots_commons.gh_posts import (
+    gh_patch_with_retry,
+    gh_post_with_retry,
+    post_gh_run_status_missing_configs,
+    post_gh_run_status_not_triggered,
+)
 from _bots_commons.lit_job import (
     LIT_JOB_QUEUE_INTERVAL,
     LIT_JOB_QUEUE_TIMEOUT,
@@ -26,8 +31,6 @@ from _bots_commons.lit_job import (
 )
 from _bots_commons.utils import (
     extract_repo_details,
-    gh_patch_with_retry,
-    gh_post_with_retry,
     wrap_long_text,
 )
 

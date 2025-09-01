@@ -308,6 +308,12 @@ async def _process_task_inner(task: dict[str, Any], redis_client: redis.Redis, s
             # Generate configs
             count = 0
             for config_run in config.generate_runs():
+                if event_type == "check_run" and config_run.check_name != payload["check_run"]["name"]:
+                    logging.debug(
+                        log_prefix + f"Skipping config '{cfg_file.name}' for check '{payload['check_run']['name']}'"
+                        f" because it is not triggered by this check."
+                    )
+                    continue
                 task.update({"phase": TaskPhase.START_JOB.value, "run_config": config_run.to_dict()})
                 push_to_redis(redis_client, task)
                 count += 1
@@ -322,9 +328,7 @@ async def _process_task_inner(task: dict[str, Any], redis_client: redis.Redis, s
         config_run = ConfigRun(**task["run_config"])
         debug_mode = config_run.mode == "debug"
         logging.info(log_prefix + f"Starting litJob for config '{config_run.name}'")
-        run_params = [p or "n/a" for p in config_run.params.values()]
-        run_name = f"{config_run.file_name} / {config_run.name} ({', '.join(run_params)})"
-        # Create a check run
+        run_name = config_run.check_name
         link_lightning_jobs = f"{LIGHTNING_CLOUD_URL}/{this_teamspace().owner.name}/{this_teamspace().name}/jobs/"
         check_id = await post_gh_run_status_create_check(
             run_name=run_name, link_lit_jobs=link_lightning_jobs, **post_kwargs
