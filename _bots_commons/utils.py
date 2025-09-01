@@ -350,7 +350,7 @@ def exceeded_timeout(start_time: str | datetime | float, timeout_seconds: float 
         start_timestamp = dt.timestamp()
     elif isinstance(start_time, datetime):
         start_timestamp = start_time.timestamp()
-    elif isinstance(start_time, (int | float)):
+    elif isinstance(start_time, int | float):
         start_timestamp = float(start_time)
     else:
         raise TypeError(f"start_time must be str, datetime, or float, got {type(start_time).__name__}")

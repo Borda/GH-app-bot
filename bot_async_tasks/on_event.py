@@ -123,11 +123,11 @@ async def on_code_changed(event: sansio.Event, gh: GitHubAPI, token: str, *args:
             shutil.rmtree(repo_dir, ignore_errors=True)
     else:
         config_dir = None
-        logging.warn(log_prefix + "Failed to extract `.lightning` folder from repo.")
+        logging.warning(log_prefix + "Failed to extract `.lightning` folder from repo.")
 
     post_kwargs = {"gh": gh, "gh_url": f"/repos/{repo_owner}/{repo_name}/check-runs", "head_sha": head_sha}
     if not config_files:
-        logging.warn(log_prefix + f"No valid configs found in {config_dir}")
+        logging.warning(log_prefix + f"No valid configs found in {config_dir}")
         text_error = f"```console\n{config_error!s}\n```" if config_error else "No specific error details available."
         await post_gh_run_status_missing_configs(text=text_error, **post_kwargs)
         return
@@ -186,7 +186,6 @@ async def on_code_changed(event: sansio.Event, gh: GitHubAPI, token: str, *args:
 
     # 4) Wait for all tasks to complete
     logging.info(log_prefix + f"Waiting for {len(tasks)} tasks to complete...")
-    await asyncio.gather(*tasks)
     results = await asyncio.gather(*tasks)
     logging.info(log_prefix + f"All tasks completed: {results}")
 
@@ -207,7 +206,7 @@ async def patch_check_run(token: str, url: str, data: dict[str, Any], retries: i
     timeout = ClientTimeout(total=retries)
     async with ClientSession(timeout=timeout) as session:
         gh_api = GitHubAPI(session, "bot_async_tasks", oauth_token=token)
-        return gh_patch_with_retry(gh_api, url, data, retries=retries, backoff=backoff)
+        return await gh_patch_with_retry(gh_api, url, data, retries=retries, backoff=backoff)
 
 
 async def complete_run(

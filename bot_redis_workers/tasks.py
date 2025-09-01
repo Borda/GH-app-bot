@@ -124,7 +124,7 @@ async def process_task_with_session(task: dict[str, Any], redis_client: redis.Re
         redis_client: Redis client used to re-enqueue or push follow-up tasks.
     """
     async with ClientSession() as session:
-        await _process_task_inner(task, redis_client, session)
+        return await _process_task_inner(task, redis_client, session)
 
 
 async def process_job_pending(gh: GitHubAPI, task: dict[str, Any], lit_job: Job) -> dict[str, Any]:

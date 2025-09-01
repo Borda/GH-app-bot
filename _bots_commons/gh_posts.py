@@ -115,7 +115,7 @@ async def _get_gh_app_token(session: ClientSession, payload: dict[str, Any]) -> 
     Returns:
         Installation access token string.
     """
-    github_app_id, app_private_key, webhook_secret = load_validate_required_env_vars()
+    github_app_id, app_private_key, _ = load_validate_required_env_vars()
     jwt_token = create_jwt_token(github_app_id=github_app_id, app_private_key=app_private_key)
     # Exchange JWT for installation token
     app_gh = GitHubAPI(session, "bot_redis_workers", oauth_token=jwt_token)

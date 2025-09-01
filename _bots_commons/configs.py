@@ -46,7 +46,7 @@ class ConfigBase(ABC):
         for attr_name in vars(self):
             value = getattr(self, attr_name)
             # Only include JSON-serializable types
-            if isinstance(value, (str | int | float | bool | list | dict | type(None))):
+            if isinstance(value, str | int | float | bool | list | dict | type(None)):
                 result[attr_name] = value
 
         return result
