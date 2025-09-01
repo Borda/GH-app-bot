@@ -1,14 +1,17 @@
 # GitHub App Bot with Redis Queue and Workers
 
-This repository contains a refactored GitHub App bot that integrates with GitHub webhooks to handle events like pull requests.
+This repository contains a refactored GitHub App bot that integrates with GitHub webhooks to handle repository events like push and pull requests.
 It uses a Redis queue for task management, making the bot restart-resistant and scalable with a pool of workers.
-The bot processes tasks in phases: handling new events, starting jobs (using Lightning Jobs as placeholders), waiting for job completion, and processing results to report back to GitHub.
+The bot processes tasks in phases: handling new events, starting jobs (using Lightning Jobs), waiting for job completion, and processing results to report back to GitHub.
+Workflow execution is controlled by configurable trigger criteria that determine which events and branches should initiate validation.
 
 The code is written in Python and uses `gidgethub[aiohttp]` for webhook handling, `redis-py` for queuing, and other minimal dependencies.
 
 ## Features
 
-- Asynchronous webhook handling for GitHub events (e.g., pull_request opened/synchronized).
+- Asynchronous webhook handling for GitHub events (e.g., push, pull_request synchronized).
+- YAML-based trigger configuration allows filtering by event type (push/pull_request) and branch patterns.
+- Support for `check_run` rerequested events, allowing users to retry failed validations by clicking "Re-run" on GitHub check runs.
 - Redis-based queue for tasks, allowing multiple workers to process in parallel.
 - Phased task lifecycle: New event → Start job → Wait job → Process results.
 - Restart resistance: Unprocessed tasks remain in the queue if workers crash.
@@ -19,7 +22,7 @@ The code is written in Python and uses `gidgethub[aiohttp]` for webhook handling
 - Go to [GitHub Apps](https://github.com/settings/apps) and create a new app.
 - Set webhook URL to your server's endpoint (e.g., `https://your-domain.com/`).
 - Note down: App ID, Private Key (PEM file), Webhook Secret.
-- Install the app on target repositories and subscribe to "Pull requests" events.
+- Install the app on target repositories and subscribe to "Push", "Pull requests", and "Check runs" events.
 
 ## How to Start
 
@@ -89,15 +92,17 @@ The bot processes GitHub events through a queued, phased lifecycle to ensure rel
 
 1. **Webhook Reception (New Event)**:
 
-   - GitHub sends a webhook event (e.g., pull_request opened or synchronized) to the server (`app.py`).
-   - The event is validated and enqueued as a task of type `'new_event'` with the payload (repo details, PR number, etc.) into the Redis queue (`bot_queue`).
+   - GitHub sends a webhook event (e.g., push to branch, pull_request opened/synchronized, or check_run rerequested) to the server (`app.py`).
+   - For `check_run` events with `rerequested` action, the bot identifies which specific check failed and needs to be rerun.
+   - The event is validated and enqueued as a task of type `'new_event'` with the payload (repo details, commit SHA, branch info, etc.) into the Redis queue (`bot_queue`).
 
 2. **New Event Processing**:
 
    - A worker pops the `'new_event'` task.
-   - Clones/pulls the repository.
-   - Generates run configurations (e.g., from a config file like `.litci.yaml`—placeholder logic).
-   - Enqueues a separate `'start_job'` task for each configuration.
+   - Downloads the repository's `.lightning/workflows` folder.
+   - Parses YAML configuration files and applies trigger filtering (event type, branch patterns).
+   - Generates run configurations only for workflows that match the current event and branch.
+   - Enqueues a separate `'start_job'` task for each applicable configuration.
 
 3. **Start Job**:
 
@@ -262,10 +267,11 @@ This phased approach allows workers to handle tasks concurrently. If a worker re
 
 ## Testing and Usage
 
-1. **Create or Update a PR**:
+1. **Create or Update a PR, or Push Code**:
 
    - Go to a repository where your GitHub App is installed
-   - Create/update a pull request to trigger webhook events
+   - Push commits to a branch or create/update a pull request to trigger webhook events
+   - The bot will process events based on your workflow trigger configuration
 
 2. **Monitor Activity**:
 
@@ -280,9 +286,10 @@ This phased approach allows workers to handle tasks concurrently. If a worker re
 
 3. **Expected Behavior**:
 
-   - Webhook server logs: "Enqueued new_event for PR..."
-   - Worker logs: "Successfully processed task..."
-   - GitHub: Check runs appear on PR with status updates
+   - Webhook server logs: "Enqueued new_event for push...", "Enqueued new_event for PR...", or "Enqueued new_event for check_run..."
+   - Worker logs: "Successfully processed task..." with trigger filtering details
+   - GitHub: Check runs appear on commits/PRs with status updates based on configured triggers
+   - For rerun events: Only the specific failed check that was requested to rerun will be processed
 
 ## Code Structure
 
