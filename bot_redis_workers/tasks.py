@@ -311,7 +311,7 @@ async def _process_task_inner(task: dict[str, Any], redis_client: redis.Redis, s
                 if event_type == "check_run" and config_run.check_name != payload["check_run"]["name"]:
                     logging.debug(
                         log_prefix + f"Skipping config '{cfg_file.name}' for check '{payload['check_run']['name']}'"
-                        " because it is not triggered by this check."
+                        " because it is not triggered by this check's re-run."
                     )
                     continue
                 task.update({"phase": TaskPhase.START_JOB.value, "run_config": config_run.to_dict()})
