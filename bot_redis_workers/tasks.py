@@ -364,6 +364,14 @@ async def _process_task_inner(task: dict[str, Any], redis_client: redis.Redis, s
             "job_logs_separator": logs_separator,
             "job_exit_separator": exit_separator,
         })
+        await post_gh_run_status_update_check(
+            gh=gh,
+            gh_url=url_check_id,
+            title="Job is pending",
+            run_status=GitHubRunStatus.QUEUED,
+            started_at=task["job_start_time"],
+            summary=f"Job **{job_name}** is waiting for machine availability",
+        )
         push_to_redis(redis_client, task)
         logging.info(log_prefix + f"Enqueued litJob for config '{config_run.name}'")
         return

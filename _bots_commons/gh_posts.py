@@ -93,18 +93,15 @@ async def post_gh_run_status_update_check(
     """Update a GitHub run status."""
     if not started_at:
         started_at = datetime.utcnow().isoformat() + "Z"
-    patch_data = {
-        "status": run_status.value,
-        "started_at": started_at,
-        "output": {"summary": summary},
-        "details_url": url_job,
-    }
+    patch_data = {"status": run_status.value, "started_at": started_at, "output": {"summary": summary}}
     if title:
-        patch_data["output"].update({"title": title})
+        patch_data["output"]["title"] = title
     if text:
-        patch_data["output"].update({"text": text})
+        patch_data["output"]["text"] = text
+    if url_job:
+        patch_data["details_url"] = url_job
     if run_conclusion:
-        patch_data.update({"conclusion": run_conclusion.value})
+        patch_data["conclusion"] = run_conclusion.value
     await gh_patch_with_retry(gh=gh, url=gh_url, data=patch_data)
 
 
