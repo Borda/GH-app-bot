@@ -16,6 +16,7 @@ from lightning_sdk.lightning_cloud.env import LIGHTNING_CLOUD_URL
 from _bots_commons import LOCAL_TEMP_DIR, MAX_OUTPUT_LENGTH
 from _bots_commons.configs import ConfigFile, ConfigRun, ConfigWorkflow, GitHubRunConclusion, GitHubRunStatus
 from _bots_commons.downloads import download_repo_and_extract
+from _bots_commons.gh_posts import post_gh_run_status_missing_configs, post_gh_run_status_not_triggered
 from _bots_commons.lit_job import (
     LIT_JOB_QUEUE_INTERVAL,
     LIT_JOB_QUEUE_TIMEOUT,
@@ -124,23 +125,11 @@ async def on_code_changed(event: sansio.Event, gh: GitHubAPI, token: str, *args:
         config_dir = None
         logging.warn(log_prefix + "Failed to extract `.lightning` folder from repo.")
 
+    post_kwargs = {"gh": gh, "gh_url": f"/repos/{repo_owner}/{repo_name}/check-runs", "head_sha": head_sha}
     if not config_files:
         logging.warn(log_prefix + f"No valid configs found in {config_dir}")
         text_error = f"```console\n{config_error!s}\n```" if config_error else "No specific error details available."
-        await post_check(
-            data={
-                "name": "Lit bot",
-                "head_sha": head_sha,
-                "status": "completed",
-                "conclusion": "skipped",
-                "started_at": datetime.utcnow().isoformat() + "Z",
-                "output": {
-                    "title": "No Configs Found",
-                    "summary": "No valid configuration files found in `.lightning/workflows` folder.",
-                    "text": text_error,
-                },
-            },
-        )
+        await post_gh_run_status_missing_configs(text=text_error, **post_kwargs)
         return
 
     # 3) Launch check runs for each job
@@ -158,19 +147,8 @@ async def on_code_changed(event: sansio.Event, gh: GitHubAPI, token: str, *args:
         if not config.is_triggered_by_event(event=event.event, branch=branch_ref):
             if event.event in config.trigger:
                 # there is a trigger for this event, but it is not matched
-                await post_check(
-                    data={
-                        "name": f"{cfg_file.name} / {config.name} [{event.event}]",
-                        "head_sha": head_sha,
-                        "status": "completed",
-                        "conclusion": "skipped",
-                        "started_at": datetime.utcnow().isoformat() + "Z",
-                        "output": {
-                            "title": "Skipped",
-                            "summary": f"Configuration `{cfg_file.name}` is not triggered"
-                            f" by the event `{event.event}` on branch `{branch_ref}` (with `{config.trigger}`).",
-                        },
-                    },
+                await post_gh_run_status_not_triggered(
+                    event_type=event.event, branch_ref=branch_ref, cfg_file=cfg_file, config=config, **post_kwargs
                 )
             # skip this config if it is not triggered by the event
             logging.info(

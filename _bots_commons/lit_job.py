@@ -183,3 +183,16 @@ def finalize_job(job: Job, logs_hash: str, exit_hash: str, debug: bool = False) 
 
     # todo: cleanup job if needed or success
     return job.status, exit_code, logs
+
+
+# @lru_cache # NOTE: this can't be cached as it won't properly update job's status
+def _restore_lit_job_from_task(job_ref: dict[str, str]) -> Job:
+    """Extract litJob from task.
+
+    Args:
+        job_ref: The reference to the job, dict with keys "name", "teamspace", "org".
+
+    Returns:
+        The restored litJob.
+    """
+    return Job(name=job_ref["name"], teamspace=job_ref["teamspace"], org=job_ref["org"])

@@ -11,35 +11,34 @@ from typing import Any
 import redis
 from aiohttp import ClientSession
 from gidgethub.aiohttp import GitHubAPI
-from gidgethub.apps import get_installation_access_token
 from lightning_sdk import Job, Status, Teamspace
 from lightning_sdk.lightning_cloud.env import LIGHTNING_CLOUD_URL
 
 from _bots_commons import LOCAL_TEMP_DIR, MAX_OUTPUT_LENGTH
 from _bots_commons.configs import ConfigFile, ConfigRun, ConfigWorkflow, GitHubRunConclusion, GitHubRunStatus
 from _bots_commons.downloads import download_repo_and_extract
-from _bots_commons.lit_job import (
-    LIT_JOB_QUEUE_TIMEOUT,
-    LIT_STATUS_FINISHED,
-    LIT_STATUS_RUNNING,
-    LIT_STATUS_RUNNING_OR_FINISHED,
-    finalize_job,
-    job_run,
-)
-from _bots_commons.utils import (
-    create_jwt_token,
-    exceeded_timeout,
-    extract_repo_details,
-    load_validate_required_env_vars,
-    wrap_long_text,
-)
-from bot_redis_workers import REDIS_QUEUE
-from bot_redis_workers._gh_posts import (
+from _bots_commons.gh_posts import (
+    _get_gh_app_token,
     post_gh_run_status_create_check,
     post_gh_run_status_missing_configs,
     post_gh_run_status_not_triggered,
     post_gh_run_status_update_check,
 )
+from _bots_commons.lit_job import (
+    LIT_JOB_QUEUE_TIMEOUT,
+    LIT_STATUS_FINISHED,
+    LIT_STATUS_RUNNING,
+    LIT_STATUS_RUNNING_OR_FINISHED,
+    _restore_lit_job_from_task,
+    finalize_job,
+    job_run,
+)
+from _bots_commons.utils import (
+    exceeded_timeout,
+    extract_repo_details,
+    wrap_long_text,
+)
+from bot_redis_workers import REDIS_QUEUE
 
 
 class TaskPhase(Enum):
@@ -56,19 +55,6 @@ class TaskPhase(Enum):
 def this_teamspace() -> Teamspace:
     """Get the current Teamspace instance."""
     return Teamspace()
-
-
-# @lru_cache # NOTE: this can't be cached as it won't properly update job's status
-def _restore_lit_job_from_task(job_ref: dict[str, str]) -> Job:
-    """Extract litJob from task.
-
-    Args:
-        job_ref: The reference to the job, dict with keys "name", "teamspace", "org".
-
-    Returns:
-        The restored litJob.
-    """
-    return Job(name=job_ref["name"], teamspace=job_ref["teamspace"], org=job_ref["org"])
 
 
 # Generate run configs
@@ -227,27 +213,6 @@ async def process_job_running(gh: GitHubAPI, task: dict[str, Any], lit_job: Job)
         summary=f"Job **{job_name}** is running on Lightning Cloud",
     )
     return task
-
-
-async def _get_gh_app_token(session: ClientSession, payload: dict[str, Any]) -> str:
-    """Get an installation access token for the GitHub App.
-
-    Args:
-        session: aiohttp client session to use for GitHub API calls.
-        payload: Parsed webhook payload containing installation info.
-
-    Returns:
-        Installation access token string.
-    """
-    github_app_id, app_private_key, webhook_secret = load_validate_required_env_vars()
-    jwt_token = create_jwt_token(github_app_id=github_app_id, app_private_key=app_private_key)
-    # Exchange JWT for installation token
-    app_gh = GitHubAPI(session, "bot_redis_workers", oauth_token=jwt_token)
-    installation_id = payload["installation"]["id"]
-    token_resp = await get_installation_access_token(
-        app_gh, installation_id=installation_id, app_id=str(github_app_id), private_key=app_private_key
-    )
-    return token_resp["token"]
 
 
 async def _process_task_inner(task: dict[str, Any], redis_client: redis.Redis, session: ClientSession) -> None:

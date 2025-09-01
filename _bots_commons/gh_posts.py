@@ -1,9 +1,17 @@
 from datetime import datetime
+from typing import Any
 
+from aiohttp import ClientSession
 from gidgethub.aiohttp import GitHubAPI
+from gidgethub.apps import get_installation_access_token
 
 from _bots_commons.configs import ConfigFile, ConfigWorkflow, GitHubRunConclusion, GitHubRunStatus
-from _bots_commons.utils import gh_patch_with_retry, gh_post_with_retry
+from _bots_commons.utils import (
+    create_jwt_token,
+    gh_patch_with_retry,
+    gh_post_with_retry,
+    load_validate_required_env_vars,
+)
 
 
 async def post_gh_run_status_missing_configs(gh: GitHubAPI, gh_url: str, head_sha: str, text: str) -> None:
@@ -98,3 +106,24 @@ async def post_gh_run_status_update_check(
     if run_conclusion:
         patch_data.update({"conclusion": run_conclusion.value})
     await gh_patch_with_retry(gh=gh, url=gh_url, data=patch_data)
+
+
+async def _get_gh_app_token(session: ClientSession, payload: dict[str, Any]) -> str:
+    """Get an installation access token for the GitHub App.
+
+    Args:
+        session: aiohttp client session to use for GitHub API calls.
+        payload: Parsed webhook payload containing installation info.
+
+    Returns:
+        Installation access token string.
+    """
+    github_app_id, app_private_key, webhook_secret = load_validate_required_env_vars()
+    jwt_token = create_jwt_token(github_app_id=github_app_id, app_private_key=app_private_key)
+    # Exchange JWT for installation token
+    app_gh = GitHubAPI(session, "bot_redis_workers", oauth_token=jwt_token)
+    installation_id = payload["installation"]["id"]
+    token_resp = await get_installation_access_token(
+        app_gh, installation_id=installation_id, app_id=str(github_app_id), private_key=app_private_key
+    )
+    return token_resp["token"]
