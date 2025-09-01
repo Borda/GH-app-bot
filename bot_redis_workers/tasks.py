@@ -34,7 +34,7 @@ from _bots_commons.utils import (
     wrap_long_text,
 )
 from bot_redis_workers import REDIS_QUEUE
-from bot_redis_workers._posts import (
+from bot_redis_workers._gh_posts import (
     post_gh_run_status_create_check,
     post_gh_run_status_missing_configs,
     post_gh_run_status_not_triggered,
