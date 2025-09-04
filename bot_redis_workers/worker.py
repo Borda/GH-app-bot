@@ -1,10 +1,13 @@
 import asyncio
 import json
 import logging
+import os
+import time
 import traceback
 
 import redis
 
+from _bots_commons.utils import setup_logging
 from bot_redis_workers import REDIS_QUEUE, REDIS_URL
 from bot_redis_workers.tasks import process_task_with_session
 
@@ -15,8 +18,10 @@ def main() -> None:
     Continuously polls the Redis queue for tasks and processes them using the async task processor.
     Handles keyboard interrupts gracefully and re-enqueues failed tasks.
     """
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-    logging.info("Starting worker...")
+    # Generate unique log filename for this worker instance
+    worker_id = f"{os.getpid()}_{int(time.time())}"
+    setup_logging(log_filename=f"worker_{worker_id}.log")
+    logging.info(f"Starting worker (PID: {os.getpid()})...")
 
     # Connect to Redis (shared across workers)
     redis_client: redis.Redis = redis.from_url(REDIS_URL)

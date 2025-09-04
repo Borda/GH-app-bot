@@ -1,11 +1,13 @@
 import json
 import logging
+import os
+import time
 
 import redis
 from aiohttp import ClientSession, web
 from gidgethub import routing, sansio
 
-from _bots_commons.utils import extract_repo_details, load_validate_required_env_vars
+from _bots_commons.utils import extract_repo_details, load_validate_required_env_vars, setup_logging
 from bot_redis_workers import REDIS_QUEUE, REDIS_URL
 from bot_redis_workers.tasks import TaskPhase
 
@@ -98,6 +100,10 @@ async def init_app() -> web.Application:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+    # Generate unique log filename for this app instance
+    app_id = f"{os.getpid()}_{int(time.time())}"
+    setup_logging(log_filename=f"app_{app_id}.log")
+    logging.info(f"Starting app (PID: {os.getpid()})...")
+
     # run_app accepts either an app instance or coroutine
     web.run_app(init_app(), host="0.0.0.0", port=8080, access_log=None)

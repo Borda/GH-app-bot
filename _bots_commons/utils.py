@@ -1,4 +1,6 @@
 import hashlib
+import logging
+import logging.handlers
 import os
 import re
 import time
@@ -288,3 +290,36 @@ def exceeded_timeout(start_time: str | datetime | float, timeout_seconds: float 
         raise TypeError(f"start_time must be str, datetime, or float, got {type(start_time).__name__}")
     elapsed_time = time.time() - start_timestamp
     return elapsed_time > timeout_seconds
+
+
+def setup_logging(log_filename: str) -> None:
+    """Configure logging with both console and file handlers.
+
+    Console handler shows WARNING and ERROR level messages only.
+    File handler captures all log levels including DEBUG.
+
+    Args:
+        log_filename: Name of the log file to write to
+    """
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+
+    # Clear any existing handlers to avoid duplicates
+    logger.handlers.clear()
+
+    # Create formatter
+    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+
+    # Console handler (WARNING and ERROR only)
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(formatter)
+
+    # File handler (all levels including DEBUG)
+    file_handler = logging.FileHandler(log_filename)
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(formatter)
+
+    # Add handlers to logger
+    logger.addHandler(console_handler)
+    logger.addHandler(file_handler)
