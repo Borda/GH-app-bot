@@ -85,6 +85,7 @@ async def init_app() -> web.Application:
     # Create a GitHub routing router
     router = routing.Router()
     router.add(handle_code_event, event_type="push")
+    router.add(handle_code_event, event_type="pull_request", action="opened")
     router.add(handle_code_event, event_type="pull_request", action="synchronize")
     router.add(handle_code_event, event_type="check_run", action="rerequested")
 

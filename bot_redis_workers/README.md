@@ -9,7 +9,7 @@ The code is written in Python and uses `gidgethub[aiohttp]` for webhook handling
 
 ## Features
 
-- Asynchronous webhook handling for GitHub events (e.g., push, pull_request synchronized).
+- Asynchronous webhook handling for GitHub events (e.g., push, pull_request).
 - YAML-based trigger configuration allows filtering by event type (push/pull_request) and branch patterns.
 - Support for `check_run` rerequested events, allowing users to retry failed validations by clicking "Re-run" on GitHub check runs.
 - Redis-based queue for tasks, allowing multiple workers to process in parallel.

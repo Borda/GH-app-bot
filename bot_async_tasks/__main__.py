@@ -11,6 +11,7 @@ if __name__ == "__main__":
     # Create a router and register handlers
     router = routing.Router()
     # todo: register also re-run event
+    router.add(on_code_changed, event_type="pull_request", action="opened")
     router.add(on_code_changed, event_type="pull_request", action="synchronize")
     router.add(on_code_changed, event_type="push")
 
