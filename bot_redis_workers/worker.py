@@ -28,7 +28,10 @@ def main() -> None:
             break
         task = json.loads(task_json)
         try:
-            asyncio.run(process_task_with_session(task, redis_client))
+            asyncio.run(asyncio.wait_for(process_task_with_session(task, redis_client), timeout=10))
+        except asyncio.TimeoutError:
+            logging.error(f"Task '{task['phase']}' timed out after 10 seconds")
+            redis_client.rpush(REDIS_QUEUE, json.dumps(task))
         except KeyboardInterrupt:
             redis_client.rpush(REDIS_QUEUE, json.dumps(task))
             break
