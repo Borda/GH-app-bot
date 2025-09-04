@@ -131,14 +131,14 @@ class ConfigWorkflow(ConfigBase):
             True if the workflow should trigger for this event/branch; otherwise False.
 
         Examples:
-            >>> ConfigWorkflow._is_triggered_by_event("push", "main", {"push": {"branches": ["main"]}})
+            >>> ConfigWorkflow._is_triggered_by_event("push", "main", {"push": {"branches": ["release", "main"]}})
             True
             >>> ConfigWorkflow._is_triggered_by_event("pull_request", "main", {"pull_request": {"branches": ["main"]}})
             True
             >>> ConfigWorkflow._is_triggered_by_event("push", "feature", {"push": {"branches": ["main"]}})
             False
-            >>> ConfigWorkflow._is_triggered_by_event(
-            ...     "pull_request", "feature", {"pull_request": {"branches": ["main"]}})
+            >>> ConfigWorkflow._is_triggered_by_event("pull_request", "feature",
+            ...                                       trigger={"pull_request": {"branches": ["main"]}})
             False
             >>> ConfigWorkflow._is_triggered_by_event("push", "main")
             True
